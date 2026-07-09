@@ -74,3 +74,4 @@ st.caption(
     "This app is fully open source — [read the code on GitHub](https://github.com/M3mphistus/torn_cashflow). "
     "Not affiliated with or endorsed by Torn. See **Settings** for what data is accessed/stored and how to remove it."
 )
+st.caption(f"Feedback or suggestions? Send a Torn message to {licensing.dev_profile_link()} — see Settings.")

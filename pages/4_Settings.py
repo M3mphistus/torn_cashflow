@@ -92,6 +92,13 @@ with st.expander("What's stored, and how to remove it"):
         "your Torn API data."
     )
 
+st.divider()
+st.subheader("Feedback & Suggestions")
+st.write(
+    f"Found a bug, or have an idea for a feature? Send a Torn message to {licensing.dev_profile_link()} "
+    "— all feedback and suggestions are welcome."
+)
+
 if player is None:
     st.stop()
 
