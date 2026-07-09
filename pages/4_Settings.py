@@ -137,7 +137,12 @@ if status.is_premium:
         st.success(f"Premium active via {SOURCE_LABELS.get(status.source, status.source)} — forever.")
     else:
         expiry_display = datetime.datetime.utcfromtimestamp(status.premium_until).strftime("%Y-%m-%d %H:%M UTC")
-        st.success(f"Premium active via {SOURCE_LABELS.get(status.source, status.source)}, until {expiry_display}.")
+        message = f"Premium active via {SOURCE_LABELS.get(status.source, status.source)}, until {expiry_display}."
+        if licensing.is_expiring_soon(status):
+            days_left = licensing.days_until_expiry(status)
+            st.warning(f"{message} **Expires in {days_left:.1f} day(s)** — extend it below before it runs out.")
+        else:
+            st.success(message)
 else:
     st.info("Free tier.")
 

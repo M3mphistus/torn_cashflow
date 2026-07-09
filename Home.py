@@ -26,6 +26,15 @@ if player is None:
     st.page_link("pages/4_Settings.py", label="Open Settings to paste your key", icon="\U0001F511")
 else:
     st.success(f"Signed in as **{player.name}** (player id {player.player_id}).")
+
+    premium_status = licensing.get_premium_status(player)
+    if licensing.is_expiring_soon(premium_status):
+        days_left = licensing.days_until_expiry(premium_status)
+        st.warning(
+            f"Your Premium expires in **{days_left:.1f} day(s)** — "
+            "extend it on the **Settings** page before it runs out."
+        )
+
     latest = db.get_latest_snapshot(player.player_id)
     if latest is None:
         st.info("No sync data yet.")

@@ -131,6 +131,24 @@ def get_premium_status(player: auth.CurrentPlayer) -> PremiumStatus:
     )
 
 
+EXPIRY_WARNING_DAYS = 7
+
+
+def days_until_expiry(status: PremiumStatus) -> float | None:
+    """Days remaining until premium_until. None if not premium, or a lifetime
+    grant (effectively infinite, never worth warning about)."""
+    if not status.is_premium or status.premium_until is None:
+        return None
+    if status.premium_until >= LIFETIME_SENTINEL_TS:
+        return None
+    return (status.premium_until - int(time.time())) / 86400
+
+
+def is_expiring_soon(status: PremiumStatus) -> bool:
+    days = days_until_expiry(status)
+    return days is not None and days < EXPIRY_WARNING_DAYS
+
+
 def start_free_trial(player: auth.CurrentPlayer) -> TrialResult:
     player_row = db.get_player(player.player_id)
     if player_row and player_row["trial_used_at"] is not None:
