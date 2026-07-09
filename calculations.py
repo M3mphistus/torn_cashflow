@@ -66,57 +66,39 @@ def _num(value) -> int:
     return value or 0
 
 
-def liquid_total(snapshot) -> int:
-    return _num(snapshot["money_onhand"]) + _num(snapshot["vault_amount"]) + _num(snapshot["bank_amount"])
+def _countable_entries(log_entries: list) -> list:
+    """Entries that count toward cashflow: a real amount, and not marked Ignored."""
+    return [e for e in log_entries if e["amount"] is not None and e["app_category"] != IGNORED_CATEGORY]
 
 
-def total_cashflow(snapshots: list) -> int:
-    if len(snapshots) < 2:
-        return 0
-    return liquid_total(snapshots[-1]) - liquid_total(snapshots[0])
+def cashflow_from_entries(log_entries: list) -> float:
+    return sum(e["amount"] for e in _countable_entries(log_entries))
 
 
-def elapsed_days(snapshots: list) -> float:
-    if len(snapshots) < 2:
-        return 0.0
-    seconds = snapshots[-1]["synced_at"] - snapshots[0]["synced_at"]
-    return seconds / 86400
-
-
-def cashflow_per_day(snapshots: list) -> float:
-    days = elapsed_days(snapshots)
+def cashflow_per_day_from_entries(log_entries: list, start_ts: int, end_ts: int) -> float:
+    days = (end_ts - start_ts) / 86400
     if days <= 0:
         return 0.0
-    return total_cashflow(snapshots) / days
+    return cashflow_from_entries(log_entries) / days
 
 
-def build_deltas_dataframe(snapshots: list) -> pd.DataFrame:
-    rows = []
-    for prev, curr in zip(snapshots, snapshots[1:]):
-        rows.append(
-            {
-                "from_ts": prev["synced_at"],
-                "to_ts": curr["synced_at"],
-                "to_date": datetime.datetime.utcfromtimestamp(curr["synced_at"]).date(),
-                "cashflow_delta": liquid_total(curr) - liquid_total(prev),
-                "networth": curr["networth"],
-            }
-        )
-    return pd.DataFrame(rows)
+def daily_cashflow_from_entries(log_entries: list) -> pd.DataFrame:
+    rows = [{"to_date": _to_date(e["timestamp"]), "amount": e["amount"]} for e in _countable_entries(log_entries)]
+    if not rows:
+        return pd.DataFrame(columns=["to_date", "cashflow_delta"])
+    df = pd.DataFrame(rows)
+    return df.groupby("to_date")["amount"].sum().reset_index().rename(columns={"amount": "cashflow_delta"})
 
 
-def daily_series(snapshots: list) -> pd.DataFrame:
-    df = build_deltas_dataframe(snapshots)
-    if df.empty:
-        return df
-    daily = df.groupby("to_date").agg(
-        cashflow_delta=("cashflow_delta", "sum"),
-        networth=("networth", "last"),
-    ).reset_index()
-    return daily
+def daily_networth_from_snapshots(snapshots: list) -> pd.DataFrame:
+    rows = [{"to_date": _to_date(s["synced_at"]), "networth": s["networth"]} for s in snapshots]
+    if not rows:
+        return pd.DataFrame(columns=["to_date", "networth"])
+    df = pd.DataFrame(rows)
+    return df.groupby("to_date")["networth"].last().reset_index()
 
 
-def category_breakdown(log_entries: list, cashflow_total: int, categories: list[str]) -> pd.DataFrame:
+def category_breakdown(log_entries: list, categories: list[str]) -> pd.DataFrame:
     totals: dict[str, float] = {cat: 0.0 for cat in [*categories, "Uncategorized"]}
     for entry in log_entries:
         amount = entry["amount"]
@@ -126,8 +108,6 @@ def category_breakdown(log_entries: list, cashflow_total: int, categories: list[
         if cat == IGNORED_CATEGORY:
             continue
         totals[cat] = totals.get(cat, 0.0) + amount
-    attributed = sum(totals.values())
-    totals["Unattributed"] = cashflow_total - attributed
     df = pd.DataFrame([{"category": cat, "amount": amt} for cat, amt in totals.items() if amt != 0])
     return df
 

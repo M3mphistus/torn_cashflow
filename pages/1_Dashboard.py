@@ -16,7 +16,7 @@ st.title("Dashboard")
 
 player = auth.get_current_player()
 if player is None:
-    st.warning("Paste your Torn Full Access API key in Settings first.")
+    st.warning("Paste your Torn API key in Settings first.")
     st.stop()
 
 
@@ -33,12 +33,17 @@ def apply_chart_theme(fig):
 
 all_snapshots = db.get_snapshots(player.player_id)
 
-if len(all_snapshots) < 2:
-    st.info("Need at least two synced snapshots to compute deltas. Go to **Sync** and sync at least twice.")
+if not all_snapshots:
+    st.info("Need at least one synced snapshot. Go to **Sync** first.")
     st.stop()
+
+entry_range = db.get_log_entry_timestamp_range(player.player_id)
 
 min_ts = all_snapshots[0]["synced_at"]
 max_ts = all_snapshots[-1]["synced_at"]
+if entry_range is not None:
+    min_ts = min(min_ts, entry_range[0])
+    max_ts = max(max_ts, entry_range[1])
 min_date = datetime.datetime.utcfromtimestamp(min_ts).date()
 max_date = datetime.datetime.utcfromtimestamp(max_ts).date()
 
@@ -64,22 +69,22 @@ end_ts = int(datetime.datetime.combine(end_date, datetime.time.max).timestamp())
 
 snapshots = [s for s in all_snapshots if start_ts <= s["synced_at"] <= end_ts]
 
-if len(snapshots) < 2:
-    st.warning("Not enough snapshots in this range. Widen the time range.")
+if not snapshots:
+    st.warning("No synced data in this range. Widen the time range or sync first.")
     st.stop()
 
-cashflow_total = calculations.total_cashflow(snapshots)
-cashflow_day = calculations.cashflow_per_day(snapshots)
+log_entries = db.get_log_entries(player.player_id, start_ts, end_ts)
+cashflow_total = calculations.cashflow_from_entries(log_entries)
+cashflow_day = calculations.cashflow_per_day_from_entries(log_entries, start_ts, end_ts)
 
 col1, col2 = st.columns(2)
-col1.metric("Total Cashflow", f"${cashflow_total:,}")
+col1.metric("Total Cashflow", f"${cashflow_total:,.0f}")
 col2.metric("Cashflow / Day", f"${cashflow_day:,.0f}")
 
 st.divider()
 st.subheader("Cashflow by Category")
 
-log_entries = db.get_log_entries(player.player_id, start_ts, end_ts)
-breakdown = calculations.category_breakdown(log_entries, cashflow_total, db.list_categories(player.player_id))
+breakdown = calculations.category_breakdown(log_entries, db.list_categories(player.player_id))
 if breakdown.empty:
     st.info("No categorized log data in this range yet.")
 else:
@@ -109,19 +114,27 @@ st.dataframe(
 st.divider()
 st.subheader("Time Series")
 
-daily = calculations.daily_series(snapshots)
-if daily.empty:
+daily_cashflow = calculations.daily_cashflow_from_entries(log_entries)
+daily_networth = calculations.daily_networth_from_snapshots(snapshots)
+
+if daily_cashflow.empty and daily_networth.empty:
     st.info("No daily data to chart yet.")
 else:
     tab1, tab2 = st.tabs(["Cashflow / Day", "Networth"])
     with tab1:
-        fig = px.bar(daily, x="to_date", y="cashflow_delta")
-        apply_chart_theme(fig)
-        st.plotly_chart(fig, use_container_width=True)
+        if daily_cashflow.empty:
+            st.info("No categorized cashflow entries in this range yet.")
+        else:
+            fig = px.bar(daily_cashflow, x="to_date", y="cashflow_delta")
+            apply_chart_theme(fig)
+            st.plotly_chart(fig, use_container_width=True)
     with tab2:
-        fig = px.line(daily, x="to_date", y="networth")
-        apply_chart_theme(fig)
-        st.plotly_chart(fig, use_container_width=True)
+        if daily_networth.empty:
+            st.info("No synced data in this range yet.")
+        else:
+            fig = px.line(daily_networth, x="to_date", y="networth")
+            apply_chart_theme(fig)
+            st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 st.subheader("Raw Snapshots")

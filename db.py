@@ -549,6 +549,17 @@ def get_log_entries(torn_player_id: int, start_ts: int | None = None, end_ts: in
     return rows
 
 
+def get_log_entry_timestamp_range(torn_player_id: int) -> tuple[int, int] | None:
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT MIN(timestamp) AS min_ts, MAX(timestamp) AS max_ts FROM log_entries WHERE torn_player_id = %s",
+            (torn_player_id,),
+        ).fetchone()
+    if row is None or row["min_ts"] is None:
+        return None
+    return row["min_ts"], row["max_ts"]
+
+
 def get_entries_by_category(torn_player_id: int, app_category: str, limit: int | None = None) -> list[dict]:
     query = "SELECT * FROM log_entries WHERE torn_player_id = %s AND app_category = %s ORDER BY timestamp DESC"
     params = [torn_player_id, app_category]
