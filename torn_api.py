@@ -9,7 +9,7 @@ FULL_LOG_REQUEST_DELAY_SECONDS = 0.7
 
 ERROR_MESSAGES = {
     0: "Unknown Torn API error.",
-    1: "API key is empty. Add your Full Access key in Settings.",
+    1: "API key is empty. Add your API key in Settings.",
     2: "Incorrect API key. Check the key in Settings.",
     3: "Unknown request type.",
     4: "Requested field(s) are not available for this selection.",
@@ -24,7 +24,8 @@ ERROR_MESSAGES = {
     13: "Key is temporarily disabled due to inactivity.",
     14: "Daily read limit reached for this key.",
     15: "Temporary Torn API error, please try again.",
-    16: "This key's access level is not high enough for this request (needs Full Access).",
+    16: "This key doesn't have permission for this request — check that your key includes all the "
+        "selections listed in Settings (basic, bars, money, personalstats, log).",
     17: "Backend error occurred, please try again.",
     18: "API key is paused by its owner.",
     19: "Access must be migrated, please check Torn's API documentation.",

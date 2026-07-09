@@ -14,7 +14,7 @@ licensing.render_heading_with_badge("#", "Categories")
 
 player = auth.get_current_player()
 if player is None:
-    st.warning("Paste your Torn Full Access API key in Settings first.")
+    st.warning("Paste your Torn API key in Settings first.")
     st.stop()
 
 if not licensing.require_premium("Categories", player):

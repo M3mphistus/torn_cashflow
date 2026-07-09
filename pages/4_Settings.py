@@ -23,11 +23,24 @@ def show_flash(key: str) -> None:
 
 
 st.subheader("Torn API Key")
-st.caption(
-    "Create a Full Access key at torn.com → Settings → API. It's remembered in this browser "
-    "(via a cookie on this device) so you stay signed in across visits — never written to a "
-    "shared file, and never logged. Use **Log out** below to forget it on this device."
+st.write(
+    f"[Click here to create a scoped API key]({auth.CUSTOM_KEY_URL}) — this opens Torn's own key "
+    "creation page with exactly the permissions this app needs pre-checked, nothing more. No blanket "
+    "Full Access required."
 )
+with st.expander("What does this app access, and why?"):
+    st.markdown(
+        "- **Basic profile** — your name and faction, so your data is scoped to your account.\n"
+        "- **Bars** — energy/nerve/happy, for the Dashboard KPIs.\n"
+        "- **Money** — cash on hand, vault, and bank, for cashflow tracking.\n"
+        "- **Personal stats** — net worth and its breakdown.\n"
+        "- **Log** — your activity log, used to build categorized cashflow history and to detect "
+        "Xanax payments for Premium.\n\n"
+        "That's the complete list — nothing is ever written back to Torn through this key, it's used "
+        "read-only. The key itself is remembered only as a cookie in your own browser (see below), "
+        "never written to a shared file, and never logged."
+    )
+st.caption("Use **Log out** below to forget your key on this device.")
 
 player = auth.get_current_player()
 if player is not None:
@@ -36,7 +49,7 @@ if player is not None:
 show_flash("settings_api_key_flash")
 
 with st.form("api_key_form"):
-    new_key = st.text_input("Full Access API key", type="password")
+    new_key = st.text_input("Torn API key", type="password")
     submitted = st.form_submit_button("Save key")
     if submitted:
         if not new_key.strip():
@@ -57,6 +70,27 @@ with st.form("api_key_form"):
 if player is not None and st.button("Log out"):
     auth.clear_api_key()
     st.rerun()
+
+st.divider()
+st.subheader("Privacy, Data & Source")
+st.write(
+    "This app is fully open source — "
+    "[read the code on GitHub](https://github.com/M3mphistus/torn_cashflow)."
+)
+with st.expander("What's stored, and how to remove it"):
+    st.markdown(
+        "- **Your Torn player ID, name, and faction** — used to scope every query to your account only.\n"
+        "- **Synced snapshots and log entries** — whatever you've pulled in via Sync, stored in a shared "
+        "Postgres database, isolated per Torn player ID. No other player can see your data.\n"
+        "- **Checklist tasks and category rules** — your own personal setup.\n"
+        "- **Premium/license status** — whether you're on a trial, paid, or lifetime grant.\n\n"
+        "**To remove your synced data**, use **Clear DB** on the Sync page — it permanently deletes your "
+        "snapshots, log entries, and category rules. It does not currently remove your player record or "
+        "Premium/license history; if you'd like your account fully deleted, contact the developer directly.\n\n"
+        "This is an independent hobby project, not affiliated with or endorsed by Torn. It's provided "
+        "as-is, with no warranty — use your own judgment, same as with any third-party tool that reads "
+        "your Torn API data."
+    )
 
 if player is None:
     st.stop()

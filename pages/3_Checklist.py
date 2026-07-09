@@ -15,7 +15,7 @@ st.title("Checklist")
 
 player = auth.get_current_player()
 if player is None:
-    st.warning("Paste your Torn Full Access API key in Settings first.")
+    st.warning("Paste your Torn API key in Settings first.")
     st.stop()
 
 war_mode_active = db.get_setting(player.player_id, "war_mode_active", "0") == "1"

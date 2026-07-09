@@ -33,12 +33,15 @@ The app creates all tables automatically on first run.
 
 ## Getting a Torn API key
 
+This app never asks for a blanket Full Access key. Instead it uses Torn's **Custom** key type,
+scoped to exactly the selections it reads: basic profile, bars, money, personalstats, and log.
+
 1. Log in to [torn.com](https://www.torn.com).
-2. Go to **Settings** → **API**.
-3. Create a new key with **Full Access**.
-4. In this app, open **Settings** and paste the key in. It's remembered in a browser cookie
-   on your device (never written to a shared file), so you stay signed in on future visits —
-   use **Log out** in Settings to forget it.
+2. Open this app's **Settings** page and click "Create a scoped API key" — this deep-links to
+   Torn's own key creation page with exactly those selections pre-checked, nothing more.
+3. Confirm and create the key on Torn's site, then paste it back into this app's Settings.
+   It's remembered in a browser cookie on your device (never written to a shared file), so you
+   stay signed in on future visits — use **Log out** in Settings to forget it.
 
 ## How syncing works
 

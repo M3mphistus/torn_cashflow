@@ -17,6 +17,17 @@ COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 400  # ~400 days — browsers (Chrome, e
 # lifetime at 400 days regardless of what's requested, so this is effectively "no expiry":
 # the longest a "stay signed in" cookie can practically live is renewed on every login anyway.
 
+# The exact Torn selections torn_api.py reads: basic profile (identity/faction), bars,
+# money, personalstats (networth + breakdown), and log (categorized history + Xanax
+# payment detection). This deep-links to Torn's "Custom" key builder with exactly these
+# pre-checked, so visitors never have to create a blanket Full Access key.
+CUSTOM_KEY_TITLE = "Torn Cashflow Dashboard"
+CUSTOM_KEY_SELECTIONS = "basic,profile,bars,money,personalstats,log"
+CUSTOM_KEY_URL = (
+    "https://www.torn.com/preferences.php#tab=api?step=addNewKey"
+    f"&title={CUSTOM_KEY_TITLE.replace(' ', '%20')}&user={CUSTOM_KEY_SELECTIONS}"
+)
+
 
 def _cookies() -> CookieController:
     return CookieController(key=COOKIE_CONTROLLER_KEY)

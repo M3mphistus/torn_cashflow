@@ -16,7 +16,7 @@ st.caption("A SPEAKEASY LEDGER FOR TORN CITY")
 st.title("Torn Cashflow Dashboard")
 st.write(
     "Track your cashflow, energy/nerve spend, networth, and a recurring checklist — all pulled "
-    "straight from your own Torn account. Paste your Full Access API key once in Settings and "
+    "straight from your own Torn account. Create a scoped API key once in Settings and "
     "you'll stay signed in on this browser."
 )
 
@@ -69,4 +69,8 @@ st.divider()
 st.caption(
     "Free tier covers day-to-day tracking. Premium (full history sync, Categories, and automatic "
     "checklist resets) unlocks with a 7-day free trial or by sending Xanax in-game — see Settings."
+)
+st.caption(
+    "This app is fully open source — [read the code on GitHub](https://github.com/M3mphistus/torn_cashflow). "
+    "Not affiliated with or endorsed by Torn. See **Settings** for what data is accessed/stored and how to remove it."
 )

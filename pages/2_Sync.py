@@ -17,7 +17,7 @@ st.title("Sync")
 
 player = auth.get_current_player()
 if player is None:
-    st.warning("Paste your Torn Full Access API key in Settings first.")
+    st.warning("Paste your Torn API key in Settings first.")
     st.stop()
 
 api_key = player.api_key
