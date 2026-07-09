@@ -6,9 +6,9 @@
    Injected at runtime by theme.inject_theme(). Targets stable Streamlit
    [data-testid] hooks so it survives most Streamlit releases. If a future
    Streamlit renames a testid, update the selector here — nothing else changes.
+   Fonts are loaded via <link> tags in theme.py, not an @import here — that
+   moved to avoid the browser discovering them late on every page navigation.
    ========================================================================== */
-
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Archivo:wght@400;500;600;700&family=Oswald:wght@300;400;500;600;700&display=swap');
 
 :root {
   --ink:        #0a0806;   /* deepest black                */
