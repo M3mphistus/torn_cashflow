@@ -22,7 +22,7 @@
   --gold-deep:  #8a6d1a;   /* gradient shadow gold          */
   --text:       #e8dfc9;   /* champagne body                */
   --text-mute:  #9a8e74;   /* muted labels                  */
-  --text-dim:   #7d7159;   /* dimmest captions              */
+  --text-dim:   #928468;   /* dimmest captions — WCAG AA 4.5:1+ on canvas/panel-2 */
   --green:      #7f9a5b;   /* positive cashflow             */
   --red:        #a33a2e;   /* negative / oxblood            */
   --head:  'Cinzel', Georgia, serif;
