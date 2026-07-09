@@ -105,7 +105,9 @@ def render_dashboard(player_id: int) -> None:
     st.divider()
     st.subheader("Networth Breakdown")
     st.caption(
-        "As of the latest sync in the selected time range. 'Trade' isn't exposed by the Torn API and is shown as n/a."
+        "As of the latest sync in the selected time range. 'Trade' isn't exposed by the Torn API and is shown as n/a. "
+        "This reflects Torn's own networth figure, which Torn recalculates roughly once a day — not a live estimate, "
+        "so it can lag behind other tools that compute it more frequently."
     )
 
     latest_in_range = snapshots[-1]
@@ -138,6 +140,7 @@ def render_dashboard(player_id: int) -> None:
             if daily_networth.empty:
                 st.info("No synced data in this range yet.")
             else:
+                st.caption("Reflects Torn's own networth figure (recalculated roughly once a day), not a live estimate.")
                 fig = px.line(daily_networth, x="to_date", y="networth")
                 apply_chart_theme(fig)
                 st.plotly_chart(fig, use_container_width=True)
