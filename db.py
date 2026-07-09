@@ -74,6 +74,7 @@ def get_pool() -> ConnectionPool:
     )
 
 
+@st.cache_resource
 def init_db() -> None:
     with get_pool().connection() as conn:
         conn.execute(
