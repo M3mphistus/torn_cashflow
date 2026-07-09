@@ -49,6 +49,27 @@ def categorize_and_insert(snapshot_id: int, log_entries: list[dict], war_mode_ac
     return prepared_entries
 
 
+AUTO_PAYMENT_CHECK_LOOKBACK_DAYS = 30  # wider than the manual button's 7, since syncing may not happen often
+
+
+def check_payments_after_sync(player: auth.CurrentPlayer) -> str | None:
+    """Runs after every sync so Premium activates even if the player never visits
+    Settings or clicks the manual payment-check button. Returns a message only if
+    something new was actually credited, so a normal sync doesn't get noisy."""
+    messages = []
+    individual_result = licensing.scan_and_activate_payment(player, lookback_days=AUTO_PAYMENT_CHECK_LOOKBACK_DAYS)
+    if individual_result.credited_count > 0:
+        messages.append(
+            f"Credited {individual_result.weeks_added} week(s) of Premium from "
+            f"{individual_result.credited_count} Xanax payment(s)."
+        )
+    if player.faction_id:
+        group_result = licensing.scan_and_activate_group_payment(player, lookback_days=AUTO_PAYMENT_CHECK_LOOKBACK_DAYS)
+        if group_result.activated:
+            messages.append(group_result.message)
+    return "  \n".join(messages) if messages else None
+
+
 if st.button("Sync now", type="primary"):
     now_ts = int(time.time())
     from_ts = int(last_sync_at) if last_sync_at else now_ts - 7 * 86400
@@ -82,6 +103,9 @@ if st.button("Sync now", type="primary"):
     db.set_setting(player.player_id, "last_sync_at", str(now_ts))
 
     st.success(f"Sync complete. Stored 1 snapshot and {len(prepared_entries)} log entries.")
+    payment_message = check_payments_after_sync(player)
+    if payment_message:
+        st.success(payment_message)
     st.rerun()
 
 st.divider()
@@ -152,6 +176,9 @@ if st.button("Get all Data"):
         f"Full history sync complete. Stored 1 snapshot, {len(new_entries)} new log entries "
         f"({already_stored} were already stored)."
     )
+    payment_message = check_payments_after_sync(player)
+    if payment_message:
+        st.success(payment_message)
     st.rerun()
 
 st.divider()
