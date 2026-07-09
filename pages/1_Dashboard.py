@@ -31,119 +31,128 @@ def apply_chart_theme(fig):
     )
     return fig
 
-all_snapshots = db.get_snapshots(player.player_id)
+@st.fragment
+def render_dashboard(player_id: int) -> None:
+    all_snapshots = db.get_snapshots(player_id)
 
-if not all_snapshots:
-    st.info("Need at least one synced snapshot. Go to **Sync** first.")
-    st.stop()
+    if not all_snapshots:
+        st.info("Need at least one synced snapshot. Go to **Sync** first.")
+        return
 
-entry_range = db.get_log_entry_timestamp_range(player.player_id)
+    entry_range = db.get_log_entry_timestamp_range(player_id)
 
-min_ts = all_snapshots[0]["synced_at"]
-max_ts = all_snapshots[-1]["synced_at"]
-if entry_range is not None:
-    min_ts = min(min_ts, entry_range[0])
-    max_ts = max(max_ts, entry_range[1])
-min_date = datetime.datetime.utcfromtimestamp(min_ts).date()
-max_date = datetime.datetime.utcfromtimestamp(max_ts).date()
+    min_ts = all_snapshots[0]["synced_at"]
+    max_ts = all_snapshots[-1]["synced_at"]
+    if entry_range is not None:
+        min_ts = min(min_ts, entry_range[0])
+        max_ts = max(max_ts, entry_range[1])
+    min_date = datetime.datetime.utcfromtimestamp(min_ts).date()
+    max_date = datetime.datetime.utcfromtimestamp(max_ts).date()
 
-preset = st.radio("Time range", ["Last 7 days", "Last 30 days", "Last 90 days", "Custom", "All time"], horizontal=True)
-
-if preset == "Custom":
-    start_date, end_date = st.date_input(
-        "Custom range", value=(min_date, max_date), min_value=min_date, max_value=max_date
+    preset = st.radio(
+        "Time range", ["Last 7 days", "Last 30 days", "Last 90 days", "Custom", "All time"], horizontal=True
     )
-else:
-    end_date = max_date
-    if preset == "Last 7 days":
-        start_date = max(min_date, end_date - datetime.timedelta(days=7))
-    elif preset == "Last 30 days":
-        start_date = max(min_date, end_date - datetime.timedelta(days=30))
-    elif preset == "Last 90 days":
-        start_date = max(min_date, end_date - datetime.timedelta(days=90))
+
+    if preset == "Custom":
+        start_date, end_date = st.date_input(
+            "Custom range", value=(min_date, max_date), min_value=min_date, max_value=max_date
+        )
     else:
-        start_date = min_date
+        end_date = max_date
+        if preset == "Last 7 days":
+            start_date = max(min_date, end_date - datetime.timedelta(days=7))
+        elif preset == "Last 30 days":
+            start_date = max(min_date, end_date - datetime.timedelta(days=30))
+        elif preset == "Last 90 days":
+            start_date = max(min_date, end_date - datetime.timedelta(days=90))
+        else:
+            start_date = min_date
 
-start_ts = int(datetime.datetime.combine(start_date, datetime.time.min).timestamp())
-end_ts = int(datetime.datetime.combine(end_date, datetime.time.max).timestamp())
+    start_ts = int(datetime.datetime.combine(start_date, datetime.time.min).timestamp())
+    end_ts = int(datetime.datetime.combine(end_date, datetime.time.max).timestamp())
 
-snapshots = [s for s in all_snapshots if start_ts <= s["synced_at"] <= end_ts]
+    snapshots = [s for s in all_snapshots if start_ts <= s["synced_at"] <= end_ts]
 
-if not snapshots:
-    st.warning("No synced data in this range. Widen the time range or sync first.")
-    st.stop()
+    if not snapshots:
+        st.warning("No synced data in this range. Widen the time range or sync first.")
+        return
 
-log_entries = db.get_log_entries(player.player_id, start_ts, end_ts)
-cashflow_total = calculations.cashflow_from_entries(log_entries)
-cashflow_day = calculations.cashflow_per_day_from_entries(log_entries, start_ts, end_ts)
+    log_entries = db.get_log_entries(player_id, start_ts, end_ts)
+    cashflow_total = calculations.cashflow_from_entries(log_entries)
+    cashflow_day = calculations.cashflow_per_day_from_entries(log_entries, start_ts, end_ts)
 
-col1, col2 = st.columns(2)
-col1.metric("Total Cashflow", f"${cashflow_total:,.0f}")
-col2.metric("Cashflow / Day", f"${cashflow_day:,.0f}")
+    col1, col2 = st.columns(2)
+    col1.metric("Total Cashflow", f"${cashflow_total:,.0f}")
+    col2.metric("Cashflow / Day", f"${cashflow_day:,.0f}")
 
-st.divider()
-st.subheader("Cashflow by Category")
+    st.divider()
+    st.subheader("Cashflow by Category")
 
-breakdown = calculations.category_breakdown(log_entries, db.list_categories(player.player_id))
-if breakdown.empty:
-    st.info("No categorized log data in this range yet.")
-else:
-    breakdown = breakdown.sort_values("amount")
-    breakdown["sign"] = breakdown["amount"].apply(lambda v: "Positive" if v >= 0 else "Negative")
-    fig = px.bar(
-        breakdown, x="amount", y="category", orientation="h", color="sign",
-        color_discrete_map={"Positive": "#c9a227", "Negative": "#a33a2e"},
+    breakdown = calculations.category_breakdown(log_entries, db.list_categories(player_id))
+    if breakdown.empty:
+        st.info("No categorized log data in this range yet.")
+    else:
+        breakdown = breakdown.sort_values("amount")
+        breakdown["sign"] = breakdown["amount"].apply(lambda v: "Positive" if v >= 0 else "Negative")
+        fig = px.bar(
+            breakdown, x="amount", y="category", orientation="h", color="sign",
+            color_discrete_map={"Positive": "#c9a227", "Negative": "#a33a2e"},
+        )
+        fig.update_layout(showlegend=False, xaxis_title="Cashflow ($)", yaxis_title="")
+        apply_chart_theme(fig)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+    st.subheader("Networth Breakdown")
+    st.caption(
+        "As of the latest sync in the selected time range. 'Trade' isn't exposed by the Torn API and is shown as n/a."
     )
-    fig.update_layout(showlegend=False, xaxis_title="Cashflow ($)", yaxis_title="")
-    apply_chart_theme(fig)
-    st.plotly_chart(fig, use_container_width=True)
 
-st.divider()
-st.subheader("Networth Breakdown")
-st.caption("As of the latest sync in the selected time range. 'Trade' isn't exposed by the Torn API and is shown as n/a.")
+    latest_in_range = snapshots[-1]
+    nw_df = calculations.networth_breakdown(latest_in_range)
+    nw_df["formatted"] = nw_df["amount"].apply(lambda v: f"${v:,.0f}" if pd.notna(v) else "n/a")
+    st.dataframe(
+        nw_df[["component", "formatted"]].rename(columns={"component": "Component", "formatted": "Amount"}),
+        use_container_width=True,
+        hide_index=True,
+    )
 
-latest_in_range = snapshots[-1]
-nw_df = calculations.networth_breakdown(latest_in_range)
-nw_df["formatted"] = nw_df["amount"].apply(lambda v: f"${v:,.0f}" if pd.notna(v) else "n/a")
-st.dataframe(
-    nw_df[["component", "formatted"]].rename(columns={"component": "Component", "formatted": "Amount"}),
-    use_container_width=True,
-    hide_index=True,
-)
+    st.divider()
+    st.subheader("Time Series")
 
-st.divider()
-st.subheader("Time Series")
+    daily_cashflow = calculations.daily_cashflow_from_entries(log_entries)
+    daily_networth = calculations.daily_networth_from_snapshots(snapshots)
 
-daily_cashflow = calculations.daily_cashflow_from_entries(log_entries)
-daily_networth = calculations.daily_networth_from_snapshots(snapshots)
+    if daily_cashflow.empty and daily_networth.empty:
+        st.info("No daily data to chart yet.")
+    else:
+        tab1, tab2 = st.tabs(["Cashflow / Day", "Networth"])
+        with tab1:
+            if daily_cashflow.empty:
+                st.info("No categorized cashflow entries in this range yet.")
+            else:
+                fig = px.bar(daily_cashflow, x="to_date", y="cashflow_delta")
+                apply_chart_theme(fig)
+                st.plotly_chart(fig, use_container_width=True)
+        with tab2:
+            if daily_networth.empty:
+                st.info("No synced data in this range yet.")
+            else:
+                fig = px.line(daily_networth, x="to_date", y="networth")
+                apply_chart_theme(fig)
+                st.plotly_chart(fig, use_container_width=True)
 
-if daily_cashflow.empty and daily_networth.empty:
-    st.info("No daily data to chart yet.")
-else:
-    tab1, tab2 = st.tabs(["Cashflow / Day", "Networth"])
-    with tab1:
-        if daily_cashflow.empty:
-            st.info("No categorized cashflow entries in this range yet.")
-        else:
-            fig = px.bar(daily_cashflow, x="to_date", y="cashflow_delta")
-            apply_chart_theme(fig)
-            st.plotly_chart(fig, use_container_width=True)
-    with tab2:
-        if daily_networth.empty:
-            st.info("No synced data in this range yet.")
-        else:
-            fig = px.line(daily_networth, x="to_date", y="networth")
-            apply_chart_theme(fig)
-            st.plotly_chart(fig, use_container_width=True)
+    st.divider()
+    st.subheader("Raw Snapshots")
 
-st.divider()
-st.subheader("Raw Snapshots")
+    rows = [dict(s) for s in snapshots]
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df["synced_at"] = pd.to_datetime(df["synced_at"], unit="s")
+    st.dataframe(df, use_container_width=True)
 
-rows = [dict(s) for s in snapshots]
-df = pd.DataFrame(rows)
-if not df.empty:
-    df["synced_at"] = pd.to_datetime(df["synced_at"], unit="s")
-st.dataframe(df, use_container_width=True)
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button("Export CSV", data=csv, file_name="torn_snapshots.csv", mime="text/csv")
 
-csv = df.to_csv(index=False).encode("utf-8")
-st.download_button("Export CSV", data=csv, file_name="torn_snapshots.csv", mime="text/csv")
+
+render_dashboard(player.player_id)

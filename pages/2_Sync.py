@@ -168,19 +168,24 @@ if latest is not None:
 ENTRY_LIST_DISPLAY_LIMIT = 25
 
 st.divider()
-st.subheader("Uncategorized Log Entries")
 
-total_uncategorized = db.get_category_counts(player.player_id).get("Uncategorized", 0)
-uncategorized = db.get_uncategorized_log_entries(player.player_id, limit=ENTRY_LIST_DISPLAY_LIMIT)
-if not uncategorized:
-    st.info("No uncategorized log entries.")
-else:
+
+@st.fragment
+def render_uncategorized_entries(player_id: int) -> None:
+    st.subheader("Uncategorized Log Entries")
+
+    total_uncategorized = db.get_category_counts(player_id).get("Uncategorized", 0)
+    uncategorized = db.get_uncategorized_log_entries(player_id, limit=ENTRY_LIST_DISPLAY_LIMIT)
+    if not uncategorized:
+        st.info("No uncategorized log entries.")
+        return
+
     if total_uncategorized > len(uncategorized):
         st.caption(
             f"Showing the {len(uncategorized)} most recent of {total_uncategorized} uncategorized entries. "
             "Use the **Categories** page to bulk-recategorize the rest by title."
         )
-    category_options = db.list_categories(player.player_id) + ["Uncategorized"]
+    category_options = db.list_categories(player_id) + ["Uncategorized"]
     for entry in uncategorized:
         with st.container(border=True):
             ts_display = datetime.datetime.utcfromtimestamp(entry["timestamp"]).strftime("%Y-%m-%d %H:%M UTC")
@@ -199,35 +204,38 @@ else:
                 st.write("")
                 st.write("")
                 if st.button("Save", key=f"save_{entry['id']}"):
-                    db.update_log_entry_category(player.player_id, entry["id"], selected_category, user_note)
+                    db.update_log_entry_category(player_id, entry["id"], selected_category, user_note)
                     if entry["title"]:
-                        db.upsert_category_rule(player.player_id, entry["title"], selected_category)
+                        db.upsert_category_rule(player_id, entry["title"], selected_category)
                         db.bulk_categorize_by_title(
-                            player.player_id, entry["title"], selected_category, exclude_entry_id=entry["id"]
+                            player_id, entry["title"], selected_category, exclude_entry_id=entry["id"]
                         )
-                    st.rerun()
+                    st.rerun(scope="fragment")
             with cols[3]:
                 st.write("")
                 st.write("")
                 if st.button("Ignore", key=f"ignore_{entry['id']}"):
-                    db.update_log_entry_category(player.player_id, entry["id"], calculations.IGNORED_CATEGORY, user_note)
+                    db.update_log_entry_category(player_id, entry["id"], calculations.IGNORED_CATEGORY, user_note)
                     if entry["title"]:
-                        db.upsert_category_rule(player.player_id, entry["title"], calculations.IGNORED_CATEGORY)
+                        db.upsert_category_rule(player_id, entry["title"], calculations.IGNORED_CATEGORY)
                         db.bulk_categorize_by_title(
-                            player.player_id, entry["title"], calculations.IGNORED_CATEGORY, exclude_entry_id=entry["id"]
+                            player_id, entry["title"], calculations.IGNORED_CATEGORY, exclude_entry_id=entry["id"]
                         )
-                    st.rerun()
+                    st.rerun(scope="fragment")
 
-st.divider()
-st.subheader("Ignored Log Entries")
 
-total_ignored = db.get_category_counts(player.player_id).get(calculations.IGNORED_CATEGORY, 0)
-ignored_entries = db.get_entries_by_category(
-    player.player_id, calculations.IGNORED_CATEGORY, limit=ENTRY_LIST_DISPLAY_LIMIT
-)
-if not ignored_entries:
-    st.caption("No ignored log entries.")
-else:
+@st.fragment
+def render_ignored_entries(player_id: int) -> None:
+    st.subheader("Ignored Log Entries")
+
+    total_ignored = db.get_category_counts(player_id).get(calculations.IGNORED_CATEGORY, 0)
+    ignored_entries = db.get_entries_by_category(
+        player_id, calculations.IGNORED_CATEGORY, limit=ENTRY_LIST_DISPLAY_LIMIT
+    )
+    if not ignored_entries:
+        st.caption("No ignored log entries.")
+        return
+
     expander_label = f"{len(ignored_entries)} most recent of {total_ignored} ignored entries"
     with st.expander(expander_label):
         if total_ignored > len(ignored_entries):
@@ -239,8 +247,14 @@ else:
                 st.write(f"**{entry['title'] or 'Unknown event'}** — {ts_display}")
             with cols[1]:
                 if st.button("Restore", key=f"restore_{entry['id']}"):
-                    db.update_log_entry_category(player.player_id, entry["id"], "Uncategorized", entry["user_note"])
-                    st.rerun()
+                    db.update_log_entry_category(player_id, entry["id"], "Uncategorized", entry["user_note"])
+                    st.rerun(scope="fragment")
+
+
+render_uncategorized_entries(player.player_id)
+
+st.divider()
+render_ignored_entries(player.player_id)
 
 st.divider()
 st.subheader("Danger Zone")

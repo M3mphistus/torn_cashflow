@@ -4,6 +4,9 @@ import streamlit as st
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+CACHE_TTL_SECONDS = 60  # short safety-net TTL; every write below clears its own caches
+# immediately, so the acting session always sees its own change right away regardless of TTL.
+
 SEED_TASKS = [
     {
         "title": "Use energy refill",
@@ -264,6 +267,34 @@ def _migrate_licenses_origin_check() -> None:
         )
 
 
+def _invalidate_log_caches() -> None:
+    """Clear every cached read derived from api_snapshots/log_entries. Called by any
+    write that touches those tables, so the acting session sees its change immediately."""
+    get_snapshots.clear()
+    get_latest_snapshot.clear()
+    get_existing_torn_log_ids.clear()
+    get_log_entries.clear()
+    get_log_entry_timestamp_range.clear()
+    get_entries_by_category.clear()
+    get_category_counts.clear()
+    get_title_category_summary.clear()
+
+
+def _invalidate_category_caches() -> None:
+    list_categories.clear()
+    get_all_category_rules.clear()
+
+
+def _invalidate_checklist_cache() -> None:
+    list_checklist_tasks.clear()
+
+
+def _invalidate_license_caches() -> None:
+    get_license.clear()
+    list_lifetime_grants.clear()
+    count_lifetime_individual.clear()
+
+
 def upsert_player(torn_player_id: int, name: str | None, faction_id: int | None) -> None:
     now = int(time.time())
     with get_pool().connection() as conn:
@@ -276,8 +307,10 @@ def upsert_player(torn_player_id: int, name: str | None, faction_id: int | None)
             """,
             (torn_player_id, name, faction_id, now),
         )
+    get_player.clear()
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_player(torn_player_id: int) -> dict | None:
     with get_pool().connection() as conn:
         row = conn.execute(
@@ -292,8 +325,10 @@ def mark_trial_used(torn_player_id: int, started_at: int) -> None:
             "UPDATE players SET trial_used_at = %s WHERE torn_player_id = %s AND trial_used_at IS NULL",
             (started_at, torn_player_id),
         )
+    get_player.clear()
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_license(scope: str, key: int) -> dict | None:
     with get_pool().connection() as conn:
         if scope == "individual":
@@ -336,6 +371,7 @@ def upsert_license(
                 """,
                 (scope, key, premium_until, now, origin, last_payment_torn_log_id),
             )
+    _invalidate_license_caches()
 
 
 def revoke_license(scope: str, key: int) -> bool:
@@ -348,9 +384,11 @@ def revoke_license(scope: str, key: int) -> bool:
             cur = conn.execute(
                 "DELETE FROM licenses WHERE scope = %s AND group_id = %s", (scope, key)
             )
+    _invalidate_license_caches()
     return cur.rowcount > 0
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def list_lifetime_grants() -> list[dict]:
     with get_pool().connection() as conn:
         rows = conn.execute(
@@ -359,6 +397,7 @@ def list_lifetime_grants() -> list[dict]:
     return rows
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def count_lifetime_individual(player_ids: list[int]) -> int:
     if not player_ids:
         return 0
@@ -371,6 +410,7 @@ def count_lifetime_individual(player_ids: list[int]) -> int:
     return row["c"]
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_credited_payment_ids(payer_player_id: int) -> set[str]:
     with get_pool().connection() as conn:
         rows = conn.execute(
@@ -393,6 +433,7 @@ def record_credited_payment(
             """,
             (torn_log_id, payer_player_id, credited_scope, credited_group_id, weeks_granted, now),
         )
+    get_credited_payment_ids.clear()
 
 
 def ensure_player_seeded(torn_player_id: int) -> None:
@@ -453,9 +494,11 @@ def insert_snapshot(torn_player_id: int, fields: dict) -> int:
             f"VALUES ({placeholders}) RETURNING id",
             values,
         ).fetchone()
+    _invalidate_log_caches()
     return row["id"]
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_snapshots(torn_player_id: int, start_ts: int | None = None, end_ts: int | None = None) -> list[dict]:
     query = "SELECT * FROM api_snapshots WHERE torn_player_id = %s"
     params = [torn_player_id]
@@ -471,6 +514,7 @@ def get_snapshots(torn_player_id: int, start_ts: int | None = None, end_ts: int 
     return rows
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_latest_snapshot(torn_player_id: int) -> dict | None:
     with get_pool().connection() as conn:
         row = conn.execute(
@@ -480,6 +524,7 @@ def get_latest_snapshot(torn_player_id: int) -> dict | None:
     return row
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_existing_torn_log_ids(torn_player_id: int) -> set[str]:
     with get_pool().connection() as conn:
         rows = conn.execute(
@@ -496,6 +541,9 @@ def clear_synced_data(torn_player_id: int) -> None:
         conn.execute(
             "DELETE FROM settings WHERE torn_player_id = %s AND key = 'last_sync_at'", (torn_player_id,)
         )
+    _invalidate_log_caches()
+    _invalidate_category_caches()
+    get_setting.clear()
 
 
 def update_snapshot_note(torn_player_id: int, snapshot_id: int, note: str) -> None:
@@ -504,6 +552,7 @@ def update_snapshot_note(torn_player_id: int, snapshot_id: int, note: str) -> No
             "UPDATE api_snapshots SET note = %s WHERE id = %s AND torn_player_id = %s",
             (note, snapshot_id, torn_player_id),
         )
+    _invalidate_log_caches()
 
 
 def insert_log_entries(torn_player_id: int, snapshot_id: int, entries: list[dict]) -> None:
@@ -532,8 +581,10 @@ def insert_log_entries(torn_player_id: int, snapshot_id: int, entries: list[dict
                     entry.get("user_note"),
                 ),
             )
+    _invalidate_log_caches()
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_log_entries(torn_player_id: int, start_ts: int | None = None, end_ts: int | None = None) -> list[dict]:
     query = "SELECT * FROM log_entries WHERE torn_player_id = %s"
     params = [torn_player_id]
@@ -549,6 +600,7 @@ def get_log_entries(torn_player_id: int, start_ts: int | None = None, end_ts: in
     return rows
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_log_entry_timestamp_range(torn_player_id: int) -> tuple[int, int] | None:
     with get_pool().connection() as conn:
         row = conn.execute(
@@ -560,6 +612,7 @@ def get_log_entry_timestamp_range(torn_player_id: int) -> tuple[int, int] | None
     return row["min_ts"], row["max_ts"]
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_entries_by_category(torn_player_id: int, app_category: str, limit: int | None = None) -> list[dict]:
     query = "SELECT * FROM log_entries WHERE torn_player_id = %s AND app_category = %s ORDER BY timestamp DESC"
     params = [torn_player_id, app_category]
@@ -581,6 +634,7 @@ def update_log_entry_category(torn_player_id: int, entry_id: int, app_category: 
             "UPDATE log_entries SET app_category = %s, user_note = %s WHERE id = %s AND torn_player_id = %s",
             (app_category, user_note, entry_id, torn_player_id),
         )
+    _invalidate_log_caches()
 
 
 def bulk_categorize_by_title(
@@ -593,6 +647,7 @@ def bulk_categorize_by_title(
             (app_category, torn_player_id, title, exclude_entry_id or -1),
         )
         updated = cur.rowcount
+    _invalidate_log_caches()
     return updated
 
 
@@ -603,8 +658,10 @@ def upsert_category_rule(torn_player_id: int, title: str, app_category: str) -> 
             "ON CONFLICT (torn_player_id, title) DO UPDATE SET app_category = excluded.app_category",
             (torn_player_id, title, app_category),
         )
+    _invalidate_category_caches()
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_all_category_rules(torn_player_id: int) -> dict[str, str]:
     with get_pool().connection() as conn:
         rows = conn.execute(
@@ -621,9 +678,11 @@ def reassign_category(torn_player_id: int, title: str, from_category: str, to_ca
             (to_category, torn_player_id, title, from_category),
         )
         updated = cur.rowcount
+    _invalidate_log_caches()
     return updated
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def list_categories(torn_player_id: int) -> list[str]:
     with get_pool().connection() as conn:
         rows = conn.execute(
@@ -639,6 +698,7 @@ def add_category(torn_player_id: int, name: str) -> bool:
             (torn_player_id, name),
         )
         added = cur.rowcount > 0
+    _invalidate_category_caches()
     return added
 
 
@@ -653,9 +713,11 @@ def delete_category(torn_player_id: int, name: str) -> bool:
         conn.execute(
             "DELETE FROM categories WHERE torn_player_id = %s AND name = %s", (torn_player_id, name)
         )
+    _invalidate_category_caches()
     return True
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_category_counts(torn_player_id: int) -> dict[str, int]:
     with get_pool().connection() as conn:
         rows = conn.execute(
@@ -665,6 +727,7 @@ def get_category_counts(torn_player_id: int) -> dict[str, int]:
     return {row["app_category"]: row["c"] for row in rows}
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_title_category_summary(torn_player_id: int, filter_category: str | None = None) -> list[dict]:
     query = "SELECT title, app_category, COUNT(*) AS c FROM log_entries WHERE torn_player_id = %s"
     params = [torn_player_id]
@@ -684,8 +747,10 @@ def recategorize_period(torn_player_id: int, start_ts: int, end_ts: int, app_cat
             "WHERE torn_player_id = %s AND timestamp >= %s AND timestamp <= %s",
             (app_category, torn_player_id, start_ts, end_ts),
         )
+    _invalidate_log_caches()
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def get_setting(torn_player_id: int, key: str, default: str | None = None) -> str | None:
     with get_pool().connection() as conn:
         row = conn.execute(
@@ -703,8 +768,10 @@ def set_setting(torn_player_id: int, key: str, value: str) -> None:
             "ON CONFLICT (torn_player_id, key) DO UPDATE SET value = excluded.value",
             (torn_player_id, key, value),
         )
+    get_setting.clear()
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
 def list_checklist_tasks(torn_player_id: int) -> list[dict]:
     with get_pool().connection() as conn:
         rows = conn.execute(
@@ -729,6 +796,7 @@ def create_checklist_task(
             """,
             (torn_player_id, title, description, repeat_type, repeat_interval_days, now),
         ).fetchone()
+    _invalidate_checklist_cache()
     return row["id"]
 
 
@@ -749,6 +817,7 @@ def update_checklist_task(
             """,
             (title, description, repeat_type, repeat_interval_days, task_id, torn_player_id),
         )
+    _invalidate_checklist_cache()
 
 
 def delete_checklist_task(torn_player_id: int, task_id: int) -> None:
@@ -756,6 +825,7 @@ def delete_checklist_task(torn_player_id: int, task_id: int) -> None:
         conn.execute(
             "DELETE FROM checklist_tasks WHERE id = %s AND torn_player_id = %s", (task_id, torn_player_id)
         )
+    _invalidate_checklist_cache()
 
 
 def set_task_done(torn_player_id: int, task_id: int, done: bool, completed_at: int | None) -> None:
@@ -765,6 +835,7 @@ def set_task_done(torn_player_id: int, task_id: int, done: bool, completed_at: i
             "WHERE id = %s AND torn_player_id = %s",
             (done, completed_at, task_id, torn_player_id),
         )
+    _invalidate_checklist_cache()
 
 
 def reset_task_cycle(torn_player_id: int, task_id: int) -> None:
@@ -773,3 +844,4 @@ def reset_task_cycle(torn_player_id: int, task_id: int) -> None:
             "UPDATE checklist_tasks SET is_done_current_cycle = FALSE WHERE id = %s AND torn_player_id = %s",
             (task_id, torn_player_id),
         )
+    _invalidate_checklist_cache()

@@ -56,19 +56,24 @@ for category in categories:
             st.rerun()
 
 st.divider()
-st.subheader("Review & Recategorize")
-st.caption(
-    "Every log title seen so far, grouped by its current category. Edit the Category column and click "
-    "Apply to reassign all matching entries — the choice is also remembered for future syncs."
-)
 
-filter_options = ["All", *categories, "Uncategorized", calculations.IGNORED_CATEGORY]
-filter_choice = st.selectbox("Filter by category", filter_options)
 
-summary_rows = db.get_title_category_summary(player.player_id, None if filter_choice == "All" else filter_choice)
-if not summary_rows:
-    st.info("No log entries yet.")
-else:
+@st.fragment
+def render_review_and_recategorize(player_id: int, categories: list[str]) -> None:
+    st.subheader("Review & Recategorize")
+    st.caption(
+        "Every log title seen so far, grouped by its current category. Edit the Category column and click "
+        "Apply to reassign all matching entries — the choice is also remembered for future syncs."
+    )
+
+    filter_options = ["All", *categories, "Uncategorized", calculations.IGNORED_CATEGORY]
+    filter_choice = st.selectbox("Filter by category", filter_options)
+
+    summary_rows = db.get_title_category_summary(player_id, None if filter_choice == "All" else filter_choice)
+    if not summary_rows:
+        st.info("No log entries yet.")
+        return
+
     summary_df = pd.DataFrame([dict(r) for r in summary_rows]).rename(
         columns={"title": "Title", "app_category": "Category", "c": "Entries"}
     )
@@ -90,12 +95,15 @@ else:
         changes = 0
         for original, edited in zip(summary_df.itertuples(), edited_df.itertuples()):
             if original.Category != edited.Category:
-                db.reassign_category(player.player_id, original.Title, original.Category, edited.Category)
+                db.reassign_category(player_id, original.Title, original.Category, edited.Category)
                 if original.Title:
-                    db.upsert_category_rule(player.player_id, original.Title, edited.Category)
+                    db.upsert_category_rule(player_id, original.Title, edited.Category)
                 changes += 1
         if changes:
             st.success(f"Reassigned {changes} title group(s).")
-            st.rerun()
+            st.rerun(scope="fragment")
         else:
             st.info("No changes to apply.")
+
+
+render_review_and_recategorize(player.player_id, categories)
