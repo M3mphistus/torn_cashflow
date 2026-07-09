@@ -10,7 +10,7 @@ import theme
 st.set_page_config(page_title="Categories - Torn Cashflow", page_icon="\U0001F3F7", layout="wide")
 theme.inject_theme()
 db.init_db()
-st.title("Categories")
+licensing.render_heading_with_badge("#", "Categories")
 
 player = auth.get_current_player()
 if player is None:

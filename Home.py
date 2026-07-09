@@ -4,6 +4,7 @@ import streamlit as st
 
 import auth
 import db
+import licensing
 import theme
 
 st.set_page_config(page_title="Torn Cashflow Dashboard", page_icon="\U0001F4B0", layout="wide")
@@ -55,8 +56,8 @@ with col3:
 col4, col5 = st.columns(2)
 with col4:
     with st.container(border=True):
-        st.subheader("Categories")
-        st.caption("Manage categories and bulk-recategorize log entries by title. Premium.")
+        licensing.render_heading_with_badge("###", "Categories")
+        st.caption("Manage categories and bulk-recategorize log entries by title.")
         st.page_link("pages/5_Categories.py", label="Open Categories")
 with col5:
     with st.container(border=True):

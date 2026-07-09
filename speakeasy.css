@@ -237,6 +237,21 @@ hr, [data-testid="stDivider"] {
 }
 [data-testid="stTable"] tbody td { color: #cdbf9c !important; }
 
+/* ---- Premium feature badge ---------------------------------------------- */
+.premium-badge {
+  display: inline-block;
+  font-family: var(--label);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-size: 10px;
+  padding: 2px 8px;
+  margin-left: 10px;
+  border: 1px solid var(--gold);
+  color: var(--gold-bright);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 /* ---- Alerts (info / success / warning / error) -------------------------- */
 [data-testid="stAlert"] {
   border-radius: 0;

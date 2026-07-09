@@ -85,12 +85,16 @@ if st.button("Sync now", type="primary"):
     st.rerun()
 
 st.divider()
-st.subheader("Full History Sync")
+licensing.render_heading_with_badge("###", "Full History Sync")
 st.caption(
     "Fetches your current bars/money/stats plus your complete log history by paging backward through "
     "the Torn API, bypassing its ~100-entries-per-call cap. This uses many API requests and can take a "
     "while for accounts with a long history."
 )
+if not licensing.get_premium_status(player).is_premium:
+    st.caption(
+        "Requires Premium — clicking below will show your options (trial, Xanax payment, or faction bulk)."
+    )
 
 if st.button("Get all Data"):
     if not licensing.require_premium("Get all Data (full history sync)", player):

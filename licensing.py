@@ -76,6 +76,16 @@ def dev_profile_link() -> str:
     return f"[{name} [{player_id}]](https://www.torn.com/profiles.php?XID={player_id})"
 
 
+def premium_badge_html() -> str:
+    return '<span class="premium-badge">Premium</span>'
+
+
+def render_heading_with_badge(markdown_prefix: str, text: str) -> None:
+    """Render a heading (e.g. '###') with a Premium badge inline next to it,
+    so it's clear before a visitor clicks anything that a feature is gated."""
+    st.markdown(f"{markdown_prefix} {text} {premium_badge_html()}", unsafe_allow_html=True)
+
+
 def is_admin(player: auth.CurrentPlayer) -> bool:
     return player.player_id == _dev_torn_player_id()
 
