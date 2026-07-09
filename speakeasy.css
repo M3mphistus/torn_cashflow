@@ -1,0 +1,249 @@
+/* ==========================================================================
+   TORN CASHFLOW — "SPEAKEASY LEDGER"
+   Old-school gangster-noir theme for the Streamlit app.
+   Gold & black · art-deco · Cinzel + Oswald + Archivo.
+
+   Injected at runtime by theme.inject_theme(). Targets stable Streamlit
+   [data-testid] hooks so it survives most Streamlit releases. If a future
+   Streamlit renames a testid, update the selector here — nothing else changes.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Archivo:wght@400;500;600;700&family=Oswald:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --ink:        #0a0806;   /* deepest black                */
+  --canvas:     #14100b;   /* app background               */
+  --panel:      #1d1710;   /* cards / sidebar / inputs      */
+  --panel-2:    #181209;   /* nested panels                 */
+  --line:       #2c2216;   /* hairline borders              */
+  --line-lit:   #3a2e1e;   /* stronger borders              */
+  --gold:       #c9a227;   /* brass — primary accent        */
+  --gold-bright:#e4c258;   /* highlight gold / big numbers  */
+  --gold-deep:  #8a6d1a;   /* gradient shadow gold          */
+  --text:       #e8dfc9;   /* champagne body                */
+  --text-mute:  #9a8e74;   /* muted labels                  */
+  --text-dim:   #7d7159;   /* dimmest captions              */
+  --green:      #7f9a5b;   /* positive cashflow             */
+  --red:        #a33a2e;   /* negative / oxblood            */
+  --head:  'Cinzel', Georgia, serif;
+  --label: 'Oswald', sans-serif;
+  --body:  'Archivo', system-ui, sans-serif;
+}
+
+/* ---- Canvas & shell ----------------------------------------------------- */
+.stApp,
+[data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(201,162,39,.06), transparent 60%),
+    var(--canvas);
+  color: var(--text);
+  font-family: var(--body);
+}
+[data-testid="stHeader"] { background: transparent; }
+[data-testid="stToolbar"] { right: 12px; }
+.block-container { padding-top: 3.2rem; }
+
+/* ---- Sidebar ------------------------------------------------------------ */
+[data-testid="stSidebar"] {
+  background: linear-gradient(#181209, #120d07);
+  border-right: 1px solid var(--line-lit);
+}
+[data-testid="stSidebar"] * { color: var(--text) !important; }
+[data-testid="stSidebarNav"] a {
+  font-family: var(--label);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+[data-testid="stSidebarNav"] a:hover { color: var(--gold-bright) !important; }
+
+/* ---- Headings ----------------------------------------------------------- */
+h1, h2, h3 {
+  font-family: var(--head) !important;
+  color: var(--text) !important;
+  letter-spacing: .03em;
+  font-weight: 700 !important;
+}
+h1 { color: var(--text) !important; }
+/* Subheaders get a small deco diamond */
+h3::before {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin-right: 10px;
+  background: var(--gold);
+  transform: rotate(45deg);
+  vertical-align: middle;
+}
+/* Small-caps eyebrow feel for captions */
+[data-testid="stCaptionContainer"], .stCaption, small {
+  color: var(--text-dim) !important;
+}
+
+a { color: var(--gold) !important; }
+a:hover { color: var(--gold-bright) !important; }
+
+/* ---- KPI metrics -------------------------------------------------------- */
+[data-testid="stMetric"] {
+  background: linear-gradient(#1d1710, #161009);
+  border: 1px solid var(--line-lit);
+  padding: 16px 18px;
+  position: relative;
+}
+/* deco corner bracket */
+[data-testid="stMetric"]::before,
+[data-testid="stMetric"]::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  background: var(--gold);
+}
+[data-testid="stMetric"]::before { width: 22px; height: 2px; }
+[data-testid="stMetric"]::after  { width: 2px;  height: 22px; }
+[data-testid="stMetricLabel"] * {
+  font-family: var(--label) !important;
+  text-transform: uppercase;
+  letter-spacing: .2em;
+  font-size: 11px !important;
+  color: var(--text-mute) !important;
+}
+[data-testid="stMetricValue"] {
+  font-family: var(--head) !important;
+  font-weight: 700 !important;
+  color: var(--gold-bright) !important;
+}
+[data-testid="stMetricDelta"] { font-family: var(--label) !important; }
+
+/* ---- Buttons ------------------------------------------------------------ */
+.stButton > button,
+.stDownloadButton > button,
+.stFormSubmitButton > button {
+  font-family: var(--label);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 12px;
+  border-radius: 0;
+  border: 1px solid var(--line-lit);
+  background: transparent;
+  color: var(--gold) !important;
+  transition: background .12s, color .12s;
+}
+.stButton > button:hover,
+.stDownloadButton > button:hover,
+.stFormSubmitButton > button:hover {
+  background: rgba(201,162,39,.12);
+  border-color: var(--gold);
+  color: var(--gold-bright) !important;
+}
+/* primary / type="primary" */
+.stButton > button[kind="primary"],
+.stFormSubmitButton > button[kind="primary"] {
+  background: var(--gold);
+  color: var(--ink) !important;
+  border-color: var(--gold);
+}
+.stButton > button[kind="primary"]:hover {
+  background: var(--gold-bright);
+  color: var(--ink) !important;
+}
+
+/* ---- Radio / segmented time-range -------------------------------------- */
+[data-testid="stRadio"] > div { gap: 0 !important; }
+[data-testid="stRadio"] label {
+  font-family: var(--label);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 12px;
+  border: 1px solid var(--line-lit);
+  border-left: none;
+  padding: 6px 14px;
+  margin: 0 !important;
+  color: var(--text-mute);
+}
+[data-testid="stRadio"] label:first-of-type { border-left: 1px solid var(--line-lit); }
+[data-testid="stRadio"] input:checked + div,
+[data-testid="stRadio"] [aria-checked="true"] { color: var(--gold-bright); }
+[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child { display: none; } /* hide bullet, pill look */
+
+/* ---- Tabs --------------------------------------------------------------- */
+[data-baseweb="tab-list"] { border-bottom: 1px solid var(--line-lit); gap: 2px; }
+[data-baseweb="tab"] {
+  font-family: var(--label);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 12px;
+  color: var(--text-mute);
+}
+[data-baseweb="tab"][aria-selected="true"] { color: var(--gold-bright); }
+[data-baseweb="tab-highlight"] { background: var(--gold) !important; }
+
+/* ---- Inputs / selects / textareas -------------------------------------- */
+input, textarea,
+[data-baseweb="input"], [data-baseweb="select"] > div,
+[data-baseweb="textarea"] {
+  background: var(--ink) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--line-lit) !important;
+  color: var(--text) !important;
+}
+input:focus, textarea:focus,
+[data-baseweb="input"]:focus-within,
+[data-baseweb="select"] > div:focus-within {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 1px var(--gold) !important;
+}
+[data-testid="stWidgetLabel"] p,
+label p {
+  font-family: var(--label);
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* ---- Containers / bordered blocks / expanders --------------------------- */
+[data-testid="stExpander"] details,
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: var(--panel-2);
+  border: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+}
+[data-testid="stExpander"] summary { font-family: var(--label); letter-spacing: .06em; }
+
+/* ---- Toggle (War Mode) -------------------------------------------------- */
+[data-baseweb="checkbox"][role="switch"] div:first-child { border-radius: 0 !important; }
+[data-baseweb="checkbox"][role="switch"] [aria-checked="true"] { background: var(--gold) !important; }
+
+/* ---- Dividers ----------------------------------------------------------- */
+hr, [data-testid="stDivider"] {
+  border: none;
+  border-top: 1px solid var(--gold);
+  opacity: .35;
+}
+
+/* ---- Tables / dataframes ------------------------------------------------ */
+[data-testid="stTable"] table,
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--line) !important;
+}
+[data-testid="stTable"] thead th,
+[data-testid="stDataFrame"] [role="columnheader"] {
+  background: var(--panel) !important;
+  font-family: var(--label) !important;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-size: 10px !important;
+  color: var(--text-mute) !important;
+}
+[data-testid="stTable"] tbody td { color: #cdbf9c !important; }
+
+/* ---- Alerts (info / success / warning / error) -------------------------- */
+[data-testid="stAlert"] {
+  border-radius: 0;
+  border-left: 3px solid var(--gold);
+  background: var(--panel-2);
+  font-family: var(--body);
+}
+
+/* ---- Plotly charts: give the paper a panel look ------------------------- */
+.js-plotly-plot .plot-container { filter: saturate(1.05); }
