@@ -143,6 +143,10 @@ TITLE_AMOUNT_OVERRIDES = {
     "Stock sell": ("worth", 1),
 }
 
+# Titles where Torn logs a plain positive magnitude regardless of direction, but the
+# entry is always an outflow from this player's own perspective (it's their own log).
+FORCE_NEGATIVE_TITLES = {"Money send"}
+
 
 def _extract_amount(title: str | None, details: dict) -> float | None:
     override = TITLE_AMOUNT_OVERRIDES.get(title)
@@ -159,9 +163,12 @@ def _extract_amount(title: str | None, details: dict) -> float | None:
     for key in AMOUNT_KEYS:
         if key in details and details[key] not in (None, ""):
             try:
-                return float(details[key])
+                amount = float(details[key])
             except (TypeError, ValueError):
                 return None
+            if title in FORCE_NEGATIVE_TITLES:
+                return -abs(amount)
+            return amount
     return None
 
 
