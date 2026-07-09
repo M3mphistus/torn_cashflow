@@ -12,6 +12,7 @@ BASE_XANAX_PER_PLAYER = 1
 PREMIUM_PERIOD_DAYS = 28
 TRIAL_PERIOD_DAYS = 7
 WEEKS_PER_XANAX = PREMIUM_PERIOD_DAYS // 7
+LIFETIME_SENTINEL_TS = 4102444800  # 2100-01-01 UTC — "forever" for this app's purposes
 
 GROUP_DISCOUNT_TIERS = [
     (1, 0.00),
@@ -26,7 +27,16 @@ GROUP_DISCOUNT_TIERS = [
 class PremiumStatus:
     is_premium: bool
     premium_until: int | None
-    source: str  # 'none' | 'trial' | 'individual' | 'faction'
+    source: str  # 'none' | 'trial' | 'individual' | 'faction' | 'lifetime_individual' | 'lifetime_faction'
+
+
+@dataclass
+class FactionRequirementPreview:
+    member_count: int
+    lifetime_covered_count: int
+    payable_members: int
+    discount_pct: float
+    required: int
 
 
 @dataclass
@@ -60,6 +70,28 @@ def _xanax_item_id() -> int:
     return int(st.secrets["XANAX_ITEM_ID"])
 
 
+def dev_profile_link() -> str:
+    player_id = _dev_torn_player_id()
+    name = st.secrets.get("DEV_TORN_PLAYER_NAME", "the developer")
+    return f"[{name} [{player_id}]](https://www.torn.com/profiles.php?XID={player_id})"
+
+
+def is_admin(player: auth.CurrentPlayer) -> bool:
+    return player.player_id == _dev_torn_player_id()
+
+
+def grant_lifetime(scope: str, key: int) -> None:
+    db.upsert_license(scope, key, LIFETIME_SENTINEL_TS, origin="lifetime", last_payment_torn_log_id=None)
+
+
+def revoke_lifetime(scope: str, key: int) -> bool:
+    return db.revoke_license(scope, key)
+
+
+def list_lifetime_grants() -> list[dict]:
+    return db.list_lifetime_grants()
+
+
 def get_premium_status(player: auth.CurrentPlayer) -> PremiumStatus:
     now_ts = int(time.time())
     best_until = 0
@@ -68,13 +100,18 @@ def get_premium_status(player: auth.CurrentPlayer) -> PremiumStatus:
     individual = db.get_license("individual", player.player_id)
     if individual and individual["premium_until"] > best_until:
         best_until = individual["premium_until"]
-        best_source = "trial" if individual["origin"] == "trial" else "individual"
+        if individual["origin"] == "trial":
+            best_source = "trial"
+        elif individual["origin"] == "lifetime":
+            best_source = "lifetime_individual"
+        else:
+            best_source = "individual"
 
     if player.faction_id:
         faction = db.get_license("faction", player.faction_id)
         if faction and faction["premium_until"] > best_until:
             best_until = faction["premium_until"]
-            best_source = "faction"
+            best_source = "lifetime_faction" if faction["origin"] == "lifetime" else "faction"
 
     is_premium = best_until > now_ts
     return PremiumStatus(
@@ -149,23 +186,57 @@ def scan_and_activate_payment(player: auth.CurrentPlayer, lookback_days: int = 7
     )
 
 
-def compute_group_requirement(member_count: int) -> int:
+def _group_discount_pct(member_count: int) -> float:
     discount = 0.0
     for min_count, tier_discount in GROUP_DISCOUNT_TIERS:
         if member_count >= min_count:
             discount = tier_discount
-    return math.ceil(member_count * (1 - discount))
+    return discount
+
+
+def compute_group_requirement(member_count: int, lifetime_covered_count: int = 0) -> int:
+    """Required bulk Xanax for a faction license.
+
+    The discount tier is based on the FULL member count (a member who already
+    has individual lifetime Premium still counts toward the faction's size/
+    discount bracket), but the actual amount owed excludes members who are
+    already covered — paying for them again would be redundant.
+    """
+    discount = _group_discount_pct(member_count)
+    payable_members = max(0, member_count - lifetime_covered_count)
+    return math.ceil(payable_members * (1 - discount))
+
+
+def get_faction_requirement_preview(player: auth.CurrentPlayer) -> FactionRequirementPreview | None:
+    if not player.faction_id:
+        return None
+    member_ids = torn_api.get_faction_member_ids(player.api_key, player.faction_id)
+    if member_ids is None:
+        return None
+    lifetime_covered_count = db.count_lifetime_individual(member_ids)
+    member_count = len(member_ids)
+    discount_pct = _group_discount_pct(member_count)
+    required = compute_group_requirement(member_count, lifetime_covered_count)
+    return FactionRequirementPreview(
+        member_count=member_count,
+        lifetime_covered_count=lifetime_covered_count,
+        payable_members=max(0, member_count - lifetime_covered_count),
+        discount_pct=discount_pct,
+        required=required,
+    )
 
 
 def scan_and_activate_group_payment(player: auth.CurrentPlayer, lookback_days: int = 7) -> GroupScanResult:
     if not player.faction_id:
         return GroupScanResult(activated=False, message="You're not in a faction.")
 
-    member_count = torn_api.get_faction_member_count(player.api_key, player.faction_id)
-    if member_count is None:
+    member_ids = torn_api.get_faction_member_ids(player.api_key, player.faction_id)
+    if member_ids is None:
         return GroupScanResult(activated=False, message="Could not read your faction's member count.")
 
-    required = compute_group_requirement(member_count)
+    member_count = len(member_ids)
+    lifetime_covered_count = db.count_lifetime_individual(member_ids)
+    required = compute_group_requirement(member_count, lifetime_covered_count)
 
     now_ts = int(time.time())
     _, qualifying, _ = _qualifying_entries(player, lookback_days)
@@ -206,7 +277,7 @@ def require_premium(feature_name: str, player: auth.CurrentPlayer) -> bool:
         return True
     st.warning(f"**{feature_name}** is a Premium feature.")
     st.write(
-        f"Send **1 Xanax** to Torn player **[{_dev_torn_player_id()}]** for 4 weeks of Premium — "
+        f"Send **1 Xanax** to {dev_profile_link()} for 4 weeks of Premium — "
         "or check your free trial / faction options on the **Settings** page."
     )
     return False

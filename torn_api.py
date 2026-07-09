@@ -238,12 +238,12 @@ def get_basic_profile(api_key: str) -> dict:
     }
 
 
-def get_faction_member_count(api_key: str, faction_id: int) -> int | None:
+def get_faction_member_ids(api_key: str, faction_id: int) -> list[int] | None:
     data = _request_faction(faction_id, api_key)
     members = data.get("members")
     if not isinstance(members, dict):
         return None
-    return len(members)
+    return [_safe_int(member_id) for member_id in members.keys()]
 
 
 def _request_faction(faction_id: int, api_key: str) -> dict:

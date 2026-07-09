@@ -218,7 +218,7 @@ def init_db() -> None:
                 premium_until BIGINT NOT NULL,
                 activated_at BIGINT NOT NULL,
                 last_payment_torn_log_id TEXT,
-                origin TEXT NOT NULL DEFAULT 'payment' CHECK (origin IN ('payment', 'trial')),
+                origin TEXT NOT NULL DEFAULT 'payment' CHECK (origin IN ('payment', 'trial', 'lifetime')),
                 CONSTRAINT chk_license_key CHECK (
                     (scope = 'individual' AND torn_player_id IS NOT NULL AND group_id IS NULL)
                     OR (scope = 'faction' AND group_id IS NOT NULL AND torn_player_id IS NULL)
@@ -247,6 +247,20 @@ def init_db() -> None:
                 UNIQUE (torn_log_id, payer_player_id)
             )
             """
+        )
+    _migrate_licenses_origin_check()
+
+
+def _migrate_licenses_origin_check() -> None:
+    """Widen the origin CHECK constraint to allow 'lifetime' on tables created
+    before that value existed. CREATE TABLE IF NOT EXISTS won't touch an
+    already-created table's constraints, so this runs unconditionally each
+    startup — cheap no-op once the constraint is already up to date."""
+    with get_pool().connection() as conn:
+        conn.execute("ALTER TABLE licenses DROP CONSTRAINT IF EXISTS licenses_origin_check")
+        conn.execute(
+            "ALTER TABLE licenses ADD CONSTRAINT licenses_origin_check "
+            "CHECK (origin IN ('payment', 'trial', 'lifetime'))"
         )
 
 
@@ -322,6 +336,39 @@ def upsert_license(
                 """,
                 (scope, key, premium_until, now, origin, last_payment_torn_log_id),
             )
+
+
+def revoke_license(scope: str, key: int) -> bool:
+    with get_pool().connection() as conn:
+        if scope == "individual":
+            cur = conn.execute(
+                "DELETE FROM licenses WHERE scope = 'individual' AND torn_player_id = %s", (key,)
+            )
+        else:
+            cur = conn.execute(
+                "DELETE FROM licenses WHERE scope = %s AND group_id = %s", (scope, key)
+            )
+    return cur.rowcount > 0
+
+
+def list_lifetime_grants() -> list[dict]:
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM licenses WHERE origin = 'lifetime' ORDER BY scope, activated_at"
+        ).fetchall()
+    return rows
+
+
+def count_lifetime_individual(player_ids: list[int]) -> int:
+    if not player_ids:
+        return 0
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM licenses "
+            "WHERE scope = 'individual' AND origin = 'lifetime' AND torn_player_id = ANY(%s)",
+            (player_ids,),
+        ).fetchone()
+    return row["c"]
 
 
 def get_credited_payment_ids(payer_player_id: int) -> set[str]:

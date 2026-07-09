@@ -2,7 +2,7 @@
 
 A shared KPI dashboard for [Torn.com](https://www.torn.com), built with Streamlit and a
 hosted Postgres database. Tracks cashflow, energy/nerve usage, and networth from your own
-Torn API data, plus a recurring checklist. Every visitor pastes their own Torn API key —
+Torn API data, plus a recurring checklist. Every visitor signs in with their own Torn API key —
 your data is scoped to your Torn player ID and never visible to anyone else.
 
 ## Setup (local development)
@@ -36,8 +36,9 @@ The app creates all tables automatically on first run.
 1. Log in to [torn.com](https://www.torn.com).
 2. Go to **Settings** → **API**.
 3. Create a new key with **Full Access**.
-4. In this app, open **Settings** and paste the key in. It's kept only in your browser
-   session (never written to disk or shared) — you'll re-paste it each time you visit.
+4. In this app, open **Settings** and paste the key in. It's remembered in a browser cookie
+   on your device (never written to a shared file), so you stay signed in on future visits —
+   use **Log out** in Settings to forget it.
 
 ## How syncing works
 
@@ -73,7 +74,7 @@ syncs, since regeneration between syncs hides some of the real spend.
 ## Project layout
 
 - `Home.py` — entrypoint and landing page
-- `auth.py` — session-scoped API key + Torn identity resolution
+- `auth.py` — API key auth + Torn identity resolution, remembered via a browser cookie
 - `licensing.py` — Free/Premium status, trial, and Xanax payment detection
 - `torn_api.py` — Torn API client
 - `db.py` — Postgres schema and CRUD (tenant-scoped by Torn player id)

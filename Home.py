@@ -15,13 +15,13 @@ st.caption("A SPEAKEASY LEDGER FOR TORN CITY")
 st.title("Torn Cashflow Dashboard")
 st.write(
     "Track your cashflow, energy/nerve spend, networth, and a recurring checklist — all pulled "
-    "straight from your own Torn account. Paste your Full Access API key each visit; nothing is "
-    "stored beyond your browser session."
+    "straight from your own Torn account. Paste your Full Access API key once in Settings and "
+    "you'll stay signed in on this browser."
 )
 
 player = auth.get_current_player()
 if player is None:
-    st.warning("No API key entered yet this session.")
+    st.warning("No API key on file for this browser yet.")
     st.page_link("pages/4_Settings.py", label="Open Settings to paste your key", icon="\U0001F511")
 else:
     st.success(f"Signed in as **{player.name}** (player id {player.player_id}).")
