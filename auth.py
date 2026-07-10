@@ -10,6 +10,7 @@ SESSION_KEY_API_KEY = "torn_api_key"
 SESSION_KEY_PLAYER = "current_player"
 SESSION_KEY_AUTH_ERROR = "auth_error"
 SESSION_KEY_COOKIE_ATTEMPTED = "auth_cookie_login_attempted"
+SESSION_KEY_PENDING_COOKIE_OP = "auth_pending_cookie_op"
 
 COOKIE_CONTROLLER_KEY = "torn_cookie_controller"
 COOKIE_NAME = "torn_api_key"
@@ -33,6 +34,30 @@ def _cookies() -> CookieController:
     return CookieController(key=COOKIE_CONTROLLER_KEY)
 
 
+def _flush_pending_cookie_op() -> None:
+    """Complete a cookie write/removal queued by a *previous* script run, before
+    this run does anything else.
+
+    Calling the cookie-controller's .set()/.remove() immediately before st.rerun()
+    tears down its iframe before the JS round-trip that actually performs
+    document.cookie=... ever completes — the write silently never happens, even
+    though the in-memory session cache optimistically looks like it worked.
+    Queuing the operation and flushing it here, at the very top of the *next*
+    script run (one that isn't itself about to call st.rerun() immediately),
+    gives the component a full render cycle to actually finish. Verified against
+    a minimal repro: with an immediate rerun, document.cookie never gets the
+    value; deferred like this, it does.
+    """
+    pending = st.session_state.pop(SESSION_KEY_PENDING_COOKIE_OP, None)
+    if pending is None:
+        return
+    action, value = pending
+    if action == "set":
+        _cookies().set(COOKIE_NAME, value, max_age=COOKIE_MAX_AGE_SECONDS)
+    elif action == "remove":
+        _cookies().remove(COOKIE_NAME)
+
+
 @dataclass
 class CurrentPlayer:
     player_id: int
@@ -54,7 +79,7 @@ def set_api_key(api_key: str, remember: bool = True) -> None:
     st.session_state.pop(SESSION_KEY_PLAYER, None)
     st.session_state.pop(SESSION_KEY_AUTH_ERROR, None)
     if remember:
-        _cookies().set(COOKIE_NAME, api_key, max_age=COOKIE_MAX_AGE_SECONDS)
+        st.session_state[SESSION_KEY_PENDING_COOKIE_OP] = ("set", api_key)
 
 
 def clear_api_key() -> None:
@@ -62,7 +87,7 @@ def clear_api_key() -> None:
     st.session_state.pop(SESSION_KEY_PLAYER, None)
     st.session_state.pop(SESSION_KEY_AUTH_ERROR, None)
     st.session_state.pop(SESSION_KEY_COOKIE_ATTEMPTED, None)
-    _cookies().remove(COOKIE_NAME)
+    st.session_state[SESSION_KEY_PENDING_COOKIE_OP] = ("remove", None)
 
 
 def resolve_player(api_key: str, remember: bool = True) -> CurrentPlayer:
@@ -78,7 +103,7 @@ def resolve_player(api_key: str, remember: bool = True) -> CurrentPlayer:
     st.session_state[SESSION_KEY_API_KEY] = api_key
     st.session_state[SESSION_KEY_PLAYER] = player
     if remember:
-        _cookies().set(COOKIE_NAME, api_key, max_age=COOKIE_MAX_AGE_SECONDS)
+        st.session_state[SESSION_KEY_PENDING_COOKIE_OP] = ("set", api_key)
     return player
 
 
@@ -94,6 +119,8 @@ def get_current_player() -> CurrentPlayer | None:
     """Session-cached player, falling back to auto-login from the remembered
     browser cookie so a visitor stays signed in across reloads/new sessions.
     """
+    _flush_pending_cookie_op()
+
     cached = st.session_state.get(SESSION_KEY_PLAYER)
     if cached is not None:
         return cached
@@ -110,7 +137,7 @@ def get_current_player() -> CurrentPlayer | None:
         return resolve_player(saved_key)
     except torn_api.TornAPIError as exc:
         if exc.code in INVALID_KEY_ERROR_CODES:
-            _cookies().remove(COOKIE_NAME)
+            st.session_state[SESSION_KEY_PENDING_COOKIE_OP] = ("remove", None)
         return None
     except torn_api.TornNetworkError:
         return None
