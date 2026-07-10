@@ -82,6 +82,14 @@ def resolve_player(api_key: str, remember: bool = True) -> CurrentPlayer:
     return player
 
 
+# Torn error code 2 = "Incorrect API key" — the only response that actually means
+# the saved key is bad. Every other TornAPIError (rate limit, maintenance, temporary
+# backend error, ...) and any TornNetworkError is transient and says nothing about
+# whether the key itself is still valid, so it must not cost the visitor their
+# remembered login — the next page load will just retry.
+INVALID_KEY_ERROR_CODES = {2}
+
+
 def get_current_player() -> CurrentPlayer | None:
     """Session-cached player, falling back to auto-login from the remembered
     browser cookie so a visitor stays signed in across reloads/new sessions.
@@ -100,8 +108,11 @@ def get_current_player() -> CurrentPlayer | None:
     st.session_state[SESSION_KEY_COOKIE_ATTEMPTED] = True
     try:
         return resolve_player(saved_key)
-    except (torn_api.TornAPIError, torn_api.TornNetworkError):
-        _cookies().remove(COOKIE_NAME)
+    except torn_api.TornAPIError as exc:
+        if exc.code in INVALID_KEY_ERROR_CODES:
+            _cookies().remove(COOKIE_NAME)
+        return None
+    except torn_api.TornNetworkError:
         return None
 
 
