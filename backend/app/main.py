@@ -1,13 +1,25 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from . import db
 from .config import settings
 from .errors import ApiError
 
-app = FastAPI(title="Torn Cashflow API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db.init_pool(settings.database_url)
+    db.init_db()
+    yield
+    db.close_pool()
+
+
+app = FastAPI(title="Torn Cashflow API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
