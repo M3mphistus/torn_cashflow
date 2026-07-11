@@ -9,6 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import db
 from .config import settings
 from .errors import ApiError
+from .routers import auth as auth_router
 
 
 @asynccontextmanager
@@ -57,3 +58,6 @@ async def http_error_handler(request, exc: StarletteHTTPException) -> JSONRespon
 @app.get("/health")
 def health() -> PlainTextResponse:
     return PlainTextResponse("ok")
+
+
+app.include_router(auth_router.router, prefix="/api/auth", tags=["auth"])
