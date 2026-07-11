@@ -16,6 +16,7 @@ from .routers import dashboard as dashboard_router
 from .routers import log_entries as log_entries_router
 from .routers import snapshots as snapshots_router
 from .routers import sync as sync_router
+from .routers import war_mode as war_mode_router
 
 
 @asynccontextmanager
@@ -73,3 +74,4 @@ app.include_router(dashboard_router.router, prefix="/api/dashboard", tags=["dash
 app.include_router(log_entries_router.router, prefix="/api/log-entries", tags=["log-entries"])
 app.include_router(categories_router.router, prefix="/api/categories", tags=["categories"])
 app.include_router(checklist_router.router, prefix="/api/checklist", tags=["checklist"])
+app.include_router(war_mode_router.router, prefix="/api/settings", tags=["settings"])
