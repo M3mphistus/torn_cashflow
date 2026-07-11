@@ -13,6 +13,10 @@ router = APIRouter()
 
 AUTO_PAYMENT_CHECK_LOOKBACK_DAYS = 30  # wider than the manual button's 7, since syncing may not happen often
 
+# Generous versus the worst-case ~0.7s-per-page + Torn request latency between checkpoints,
+# so it won't false-positive on a genuinely slow-but-alive job.
+STALE_JOB_THRESHOLD_SECONDS = 120
+
 
 def _check_payments_after_sync(player: CurrentPlayer) -> str | None:
     messages = []
@@ -64,7 +68,16 @@ def sync_incremental(player: CurrentPlayer = Depends(get_current_player)) -> Inc
     db.insert_log_entries(player.player_id, snapshot_id, prepared)
     db.set_setting(player.player_id, "last_sync_at", str(now_ts))
 
-    payment_message = _check_payments_after_sync(player)
+    try:
+        payment_message = _check_payments_after_sync(player)
+    except (torn_api.TornAPIError, torn_api.TornNetworkError):
+        # Sync itself already succeeded and is already persisted (snapshot + log entries +
+        # last_sync_at). The payment scan is opportunistic/best-effort, not core to what this
+        # endpoint promises, so a failure here (e.g. Torn rate limit on the 5th/6th call) must
+        # not fail the whole request — that would surface a raw error to the client and, since
+        # the client would believe the whole sync failed, a retry would insert a duplicate
+        # snapshot row (api_snapshots has no dedup, unlike log_entries).
+        payment_message = None
     snapshot = db.get_latest_snapshot(player.player_id)
     return IncrementalSyncResponse(
         snapshot=snapshot_to_dto(snapshot),
@@ -142,6 +155,18 @@ def get_full_history_sync(job_id: int, player: CurrentPlayer = Depends(get_curre
     job = db.get_sync_job(job_id)
     if job is None or job["torn_player_id"] != player.player_id:
         raise ApiError(404, "Sync job not found.", "not_found")
+
+    if job["status"] == "running" and int(time.time()) - job["updated_at"] > STALE_JOB_THRESHOLD_SECONDS:
+        # The background job resolves on any in-process exception, but not on process death
+        # (redeploy, OOM kill, cold spin-down mid-job). No progress for this long means the
+        # server process that owned the job is gone, so self-heal here on the read path
+        # rather than leaving the client polling a zombie "running" job forever.
+        db.fail_sync_job(
+            job_id,
+            "Job appears to have stalled (no progress for over 2 minutes) — the server "
+            "process may have restarted mid-sync. Please retry.",
+        )
+        job = db.get_sync_job(job_id)
 
     result = None
     if job["status"] == "completed":
