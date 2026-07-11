@@ -65,6 +65,18 @@ async def http_error_handler(request, exc: StarletteHTTPException) -> JSONRespon
     )
 
 
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request, exc: Exception) -> JSONResponse:
+    # Catch-all for anything not handled by the more specific handlers above (a stray
+    # torn_api error, a psycopg pool timeout, etc). Every non-2xx response from this API
+    # must use the {"error": {...}} shape, so this must never let FastAPI's default
+    # plaintext 500 escape. Never leak exception details into the response body.
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"message": "An unexpected error occurred.", "code": "internal_error", "tornErrorCode": None}},
+    )
+
+
 @app.get("/health")
 def health() -> PlainTextResponse:
     return PlainTextResponse("ok")
