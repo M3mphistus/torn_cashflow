@@ -260,6 +260,9 @@ def init_db() -> None:
             """
         )
         conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_credited_payments_payer ON credited_payments (payer_player_id)"
+        )
+        conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sync_jobs (
                 id BIGSERIAL PRIMARY KEY,
