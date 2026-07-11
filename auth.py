@@ -90,8 +90,18 @@ def clear_api_key() -> None:
     st.session_state[SESSION_KEY_PENDING_COOKIE_OP] = ("remove", None)
 
 
+@st.cache_data(ttl=60)
+def _cached_basic_profile(api_key: str) -> dict:
+    """Torn's own API is a live network round-trip we don't control the latency
+    of — this is what dominates a fresh-session auto-login (F5), since in-app
+    navigation reuses the already-resolved player and never calls it again.
+    Caching it briefly means repeated fresh-session loads within the window
+    (e.g. a user hitting F5 a few times) skip the external call entirely."""
+    return torn_api.get_basic_profile(api_key)
+
+
 def resolve_player(api_key: str, remember: bool = True) -> CurrentPlayer:
-    profile = torn_api.get_basic_profile(api_key)
+    profile = _cached_basic_profile(api_key)
     player = CurrentPlayer(
         player_id=profile["player_id"],
         name=profile["name"],
