@@ -10,6 +10,8 @@ from . import db
 from .config import settings
 from .errors import ApiError
 from .routers import auth as auth_router
+from .routers import dashboard as dashboard_router
+from .routers import snapshots as snapshots_router
 from .routers import sync as sync_router
 
 
@@ -63,3 +65,5 @@ def health() -> PlainTextResponse:
 
 app.include_router(auth_router.router, prefix="/api/auth", tags=["auth"])
 app.include_router(sync_router.router, prefix="/api/sync", tags=["sync"])
+app.include_router(snapshots_router.router, prefix="/api/snapshots", tags=["snapshots"])
+app.include_router(dashboard_router.router, prefix="/api/dashboard", tags=["dashboard"])

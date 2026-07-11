@@ -44,3 +44,19 @@ class SnapshotDTO(CamelModel):
 
 def snapshot_to_dto(row: dict) -> SnapshotDTO:
     return SnapshotDTO(**row)
+
+
+class SnapshotListResponse(CamelModel):
+    snapshots: list[SnapshotDTO]
+
+
+class SnapshotOrNoneResponse(CamelModel):
+    snapshot: SnapshotDTO | None
+
+
+class SnapshotSingleResponse(CamelModel):
+    snapshot: SnapshotDTO
+
+
+class NoteRequest(CamelModel):
+    note: str
