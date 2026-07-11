@@ -24,6 +24,8 @@ def _validate_body(body: ChecklistTaskRequest) -> None:
         raise ApiError(400, "Invalid repeatType.", "invalid_request")
     if body.repeat_type == "every_x_days" and (not body.repeat_interval_days or body.repeat_interval_days < 1):
         raise ApiError(400, "repeatIntervalDays is required and must be >= 1 for every_x_days.", "invalid_request")
+    if body.repeat_type != "every_x_days":
+        body.repeat_interval_days = None
 
 
 @router.get("")
