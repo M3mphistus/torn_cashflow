@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, field
 
 import streamlit as st
@@ -5,6 +6,12 @@ from streamlit_cookies_controller import CookieController
 
 import db
 import torn_api
+
+
+def _perf(label: str, t0: float) -> None:
+    """TEMPORARY diagnostic — remove once the F5 reload-time investigation is
+    done. Prints to Streamlit Cloud's server log (Manage app -> logs)."""
+    print(f"[PERF] {label}: {time.perf_counter() - t0:.3f}s", flush=True)
 
 SESSION_KEY_API_KEY = "torn_api_key"
 SESSION_KEY_PLAYER = "current_player"
@@ -101,19 +108,30 @@ def _cached_basic_profile(api_key: str) -> dict:
 
 
 def resolve_player(api_key: str, remember: bool = True) -> CurrentPlayer:
+    t0 = time.perf_counter()
     profile = _cached_basic_profile(api_key)
+    _perf("resolve_player: _cached_basic_profile (Torn API call)", t0)
+
     player = CurrentPlayer(
         player_id=profile["player_id"],
         name=profile["name"],
         faction_id=profile["faction_id"],
         api_key=api_key,
     )
+
+    t1 = time.perf_counter()
     db.upsert_player(player.player_id, player.name, player.faction_id)
+    _perf("resolve_player: db.upsert_player", t1)
+
+    t2 = time.perf_counter()
     db.ensure_player_seeded(player.player_id)
+    _perf("resolve_player: db.ensure_player_seeded", t2)
+
     st.session_state[SESSION_KEY_API_KEY] = api_key
     st.session_state[SESSION_KEY_PLAYER] = player
     if remember:
         st.session_state[SESSION_KEY_PENDING_COOKIE_OP] = ("set", api_key)
+    _perf("resolve_player: TOTAL", t0)
     return player
 
 
@@ -129,27 +147,40 @@ def get_current_player() -> CurrentPlayer | None:
     """Session-cached player, falling back to auto-login from the remembered
     browser cookie so a visitor stays signed in across reloads/new sessions.
     """
+    t_start = time.perf_counter()
+
+    t0 = time.perf_counter()
     _flush_pending_cookie_op()
+    _perf("get_current_player: _flush_pending_cookie_op", t0)
 
     cached = st.session_state.get(SESSION_KEY_PLAYER)
     if cached is not None:
+        _perf("get_current_player: TOTAL (session-cached, fast path)", t_start)
         return cached
 
     if st.session_state.get(SESSION_KEY_COOKIE_ATTEMPTED):
+        _perf("get_current_player: TOTAL (already attempted this session)", t_start)
         return None
 
-    saved_key = _cookies().get(COOKIE_NAME)
+    t1 = time.perf_counter()
+    saved_key = st.context.cookies.get(COOKIE_NAME)
+    _perf("get_current_player: st.context.cookies.get (native, no round-trip)", t1)
     if not saved_key:
+        _perf("get_current_player: TOTAL (no saved cookie)", t_start)
         return None
 
     st.session_state[SESSION_KEY_COOKIE_ATTEMPTED] = True
     try:
-        return resolve_player(saved_key)
+        result = resolve_player(saved_key)
+        _perf("get_current_player: TOTAL (auto-login succeeded)", t_start)
+        return result
     except torn_api.TornAPIError as exc:
         if exc.code in INVALID_KEY_ERROR_CODES:
             st.session_state[SESSION_KEY_PENDING_COOKIE_OP] = ("remove", None)
+        _perf("get_current_player: TOTAL (TornAPIError)", t_start)
         return None
     except torn_api.TornNetworkError:
+        _perf("get_current_player: TOTAL (TornNetworkError)", t_start)
         return None
 
 
@@ -157,7 +188,7 @@ def get_saved_api_key() -> str | None:
     saved = st.session_state.get(SESSION_KEY_API_KEY)
     if saved:
         return saved
-    return _cookies().get(COOKIE_NAME)
+    return st.context.cookies.get(COOKIE_NAME)
 
 
 def get_auth_error() -> str | None:

@@ -1,4 +1,5 @@
 import datetime
+import time
 
 import pandas as pd
 import plotly.express as px
@@ -9,12 +10,21 @@ import calculations
 import db
 import theme
 
+_PAGE_T0 = time.perf_counter()  # TEMPORARY diagnostic — remove after the F5 investigation
+
 st.set_page_config(page_title="Dashboard - Torn Cashflow", page_icon="\U0001F4B0", layout="wide")
 theme.inject_theme()
+
+_t = time.perf_counter()
 db.init_db()
+print(f"[PERF] Dashboard: db.init_db: {time.perf_counter() - _t:.3f}s", flush=True)
+
 st.title("Dashboard")
 
+_t = time.perf_counter()
 player = auth.get_current_player()
+print(f"[PERF] Dashboard: auth.get_current_player: {time.perf_counter() - _t:.3f}s", flush=True)
+
 if player is None:
     st.warning("Paste your Torn API key in Settings first.")
     st.stop()
@@ -159,3 +169,5 @@ def render_dashboard(player_id: int) -> None:
 
 
 render_dashboard(player.player_id)
+
+print(f"[PERF] Dashboard: FULL SCRIPT TOTAL: {time.perf_counter() - _PAGE_T0:.3f}s", flush=True)
