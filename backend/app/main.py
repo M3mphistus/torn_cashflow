@@ -13,6 +13,7 @@ from .routers import auth as auth_router
 from .routers import categories as categories_router
 from .routers import checklist as checklist_router
 from .routers import dashboard as dashboard_router
+from .routers import licensing as licensing_router
 from .routers import log_entries as log_entries_router
 from .routers import snapshots as snapshots_router
 from .routers import sync as sync_router
@@ -75,3 +76,4 @@ app.include_router(log_entries_router.router, prefix="/api/log-entries", tags=["
 app.include_router(categories_router.router, prefix="/api/categories", tags=["categories"])
 app.include_router(checklist_router.router, prefix="/api/checklist", tags=["checklist"])
 app.include_router(war_mode_router.router, prefix="/api/settings", tags=["settings"])
+app.include_router(licensing_router.router, prefix="/api/licensing", tags=["licensing"])
