@@ -10,6 +10,7 @@ from . import db
 from .config import settings
 from .errors import ApiError
 from .routers import auth as auth_router
+from .routers import sync as sync_router
 
 
 @asynccontextmanager
@@ -61,3 +62,4 @@ def health() -> PlainTextResponse:
 
 
 app.include_router(auth_router.router, prefix="/api/auth", tags=["auth"])
+app.include_router(sync_router.router, prefix="/api/sync", tags=["sync"])
