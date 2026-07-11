@@ -10,6 +10,7 @@ from . import db
 from .config import settings
 from .errors import ApiError
 from .routers import auth as auth_router
+from .routers import categories as categories_router
 from .routers import dashboard as dashboard_router
 from .routers import log_entries as log_entries_router
 from .routers import snapshots as snapshots_router
@@ -69,3 +70,4 @@ app.include_router(sync_router.router, prefix="/api/sync", tags=["sync"])
 app.include_router(snapshots_router.router, prefix="/api/snapshots", tags=["snapshots"])
 app.include_router(dashboard_router.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(log_entries_router.router, prefix="/api/log-entries", tags=["log-entries"])
+app.include_router(categories_router.router, prefix="/api/categories", tags=["categories"])
