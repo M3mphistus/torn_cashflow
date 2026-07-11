@@ -163,8 +163,8 @@ def get_current_player() -> CurrentPlayer | None:
         return None
 
     t1 = time.perf_counter()
-    saved_key = st.context.cookies.get(COOKIE_NAME)
-    _perf("get_current_player: st.context.cookies.get (native, no round-trip)", t1)
+    saved_key = _cookies().get(COOKIE_NAME)
+    _perf("get_current_player: _cookies().get (component round-trip)", t1)
     if not saved_key:
         _perf("get_current_player: TOTAL (no saved cookie)", t_start)
         return None
@@ -188,7 +188,7 @@ def get_saved_api_key() -> str | None:
     saved = st.session_state.get(SESSION_KEY_API_KEY)
     if saved:
         return saved
-    return st.context.cookies.get(COOKIE_NAME)
+    return _cookies().get(COOKIE_NAME)
 
 
 def get_auth_error() -> str | None:
