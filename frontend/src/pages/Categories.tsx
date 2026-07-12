@@ -132,6 +132,10 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
   const [edits, setEdits] = useState<Record<string, string>>({});
   useEffect(() => setEdits({}), [summaryQuery.data]);
 
+  function rowKey(row: { title: string; category: string }): string {
+    return `${row.title}::${row.category}`;
+  }
+
   // Note: Task 4's `reassignCategory` has the positional signature
   // `(title, fromCategory, toCategory)`, not the single-object signature the plan's
   // example code assumes. Adapting the mutationFn to that real signature here; the
@@ -145,12 +149,12 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
   const filterOptions = ['All', ...categories, 'Uncategorized', 'Ignored'];
   const categoryOptions = [...categories, 'Uncategorized', 'Ignored'];
   const rows = summaryQuery.data?.rows ?? [];
-  const changedCount = rows.filter((row) => edits[row.title] && edits[row.title] !== row.category).length;
+  const changedCount = rows.filter((row) => edits[rowKey(row)] && edits[rowKey(row)] !== row.category).length;
 
   async function handleApply() {
-    const changedRows = rows.filter((row) => edits[row.title] && edits[row.title] !== row.category);
+    const changedRows = rows.filter((row) => edits[rowKey(row)] && edits[rowKey(row)] !== row.category);
     for (const row of changedRows) {
-      await reassignMutation.mutateAsync({ title: row.title, fromCategory: row.category, toCategory: edits[row.title] });
+      await reassignMutation.mutateAsync({ title: row.title, fromCategory: row.category, toCategory: edits[rowKey(row)] });
     }
     setEdits({});
     queryClient.invalidateQueries({ queryKey: ['categories'] });
@@ -188,13 +192,13 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.title}>
+                <tr key={rowKey(row)}>
                   <td>{row.title}</td>
                   <td>{row.entryCount}</td>
                   <td>
                     <select
-                      value={edits[row.title] ?? row.category}
-                      onChange={(e) => setEdits((prev) => ({ ...prev, [row.title]: e.target.value }))}
+                      value={edits[rowKey(row)] ?? row.category}
+                      onChange={(e) => setEdits((prev) => ({ ...prev, [rowKey(row)]: e.target.value }))}
                     >
                       {categoryOptions.map((c) => (
                         <option key={c} value={c}>
