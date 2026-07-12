@@ -83,6 +83,7 @@ export default function DashboardPage() {
 
   const dashboard = dashboardQuery.data;
   const snapshotColumns = dashboard && dashboard.snapshots.length > 0 ? (Object.keys(dashboard.snapshots[0]) as (keyof SnapshotDTO)[]) : [];
+  const sortedCategoryBreakdown = dashboard ? [...dashboard.categoryBreakdown].sort((a, b) => a.amount - b.amount) : [];
 
   return (
     <div className="page">
@@ -138,13 +139,13 @@ export default function DashboardPage() {
             <AlertBanner kind="info">No categorized log data in this range yet.</AlertBanner>
           ) : (
             <ResponsiveContainer width="100%" height={Math.max(200, dashboard.categoryBreakdown.length * 36)}>
-              <BarChart data={[...dashboard.categoryBreakdown].sort((a, b) => a.amount - b.amount)} layout="vertical">
+              <BarChart data={sortedCategoryBreakdown} layout="vertical">
                 <CartesianGrid stroke="var(--line)" horizontal={false} />
                 <XAxis type="number" stroke="var(--text-mute)" tickFormatter={(v: number) => formatCurrency(v)} />
                 <YAxis type="category" dataKey="category" stroke="var(--text-mute)" width={140} />
                 <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} />
                 <Bar dataKey="amount">
-                  {dashboard.categoryBreakdown.map((row) => (
+                  {sortedCategoryBreakdown.map((row) => (
                     <Cell key={row.category} fill={row.amount >= 0 ? 'var(--gold)' : 'var(--red)'} />
                   ))}
                 </Bar>
