@@ -616,7 +616,7 @@ describe('formatCurrency', () => {
 
 describe('formatTimestamp', () => {
   it('formats a unix timestamp as UTC date + time', () => {
-    expect(formatTimestamp(1730000000)).toBe('2024-10-27 02:53 UTC');
+    expect(formatTimestamp(1730000000)).toBe('2024-10-27 03:33 UTC');
   });
 });
 
