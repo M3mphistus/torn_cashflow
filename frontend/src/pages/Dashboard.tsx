@@ -38,7 +38,7 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<'cashflow' | 'networth'>('cashflow');
 
   const boundsQuery = useQuery({ queryKey: ['snapshots', 'all'], queryFn: () => getSnapshots() });
-  const snapshots = boundsQuery.data?.snapshots ?? [];
+  const snapshots = useMemo(() => boundsQuery.data?.snapshots ?? [], [boundsQuery.data]);
 
   const bounds = useMemo(() => {
     if (snapshots.length === 0) return null;
@@ -48,11 +48,9 @@ export default function DashboardPage() {
   const range = useMemo(() => {
     if (!bounds) return null;
     if (preset === 'custom') {
-      if (!customStart || !customEnd) return null;
-      return resolveTimeRange('custom', bounds, {
-        startTs: fromDateInputValue(customStart, false),
-        endTs: fromDateInputValue(customEnd, true),
-      });
+      const startTs = customStart ? fromDateInputValue(customStart, false) : bounds.minTs;
+      const endTs = customEnd ? fromDateInputValue(customEnd, true) : bounds.maxTs;
+      return resolveTimeRange('custom', bounds, { startTs, endTs });
     }
     return resolveTimeRange(preset, bounds);
   }, [preset, bounds, customStart, customEnd]);
