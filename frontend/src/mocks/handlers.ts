@@ -1,5 +1,6 @@
 import { delay, http, HttpResponse } from 'msw';
 import {
+  makeSnapshot,
   mockCategories,
   mockChecklistTasks,
   mockLifetimeGrants,
@@ -285,7 +286,8 @@ export const handlers = [
   http.post('/api/sync/incremental', async () => {
     await delay(500);
     const now = Math.floor(Date.now() / 1000);
-    const snapshot: SnapshotDTO = { ...mockSnapshots[mockSnapshots.length - 1], id: mockSnapshots.length + 1000, syncedAt: now, note: null };
+    const base = mockSnapshots.length ? mockSnapshots[mockSnapshots.length - 1] : makeSnapshot(0);
+    const snapshot: SnapshotDTO = { ...base, id: mockSnapshots.length + 1000, syncedAt: now, note: null };
     mockSnapshots.push(snapshot);
     const newEntry: LogEntryDTO = {
       id: nextLogEntryId++,

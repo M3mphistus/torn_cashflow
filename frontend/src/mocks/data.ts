@@ -27,7 +27,7 @@ export const mockPremium: PremiumStatusDTO = {
   daysUntilExpiry: 10,
 };
 
-function makeSnapshot(daysAgo: number, overrides: Partial<SnapshotDTO> = {}): SnapshotDTO {
+export function makeSnapshot(daysAgo: number, overrides: Partial<SnapshotDTO> = {}): SnapshotDTO {
   const syncedAt = Math.floor(Date.now() / 1000) - daysAgo * 86400;
   return {
     id: 1000 - daysAgo,
