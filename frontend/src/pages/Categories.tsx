@@ -130,6 +130,7 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
   });
 
   const [edits, setEdits] = useState<Record<string, string>>({});
+  const [applyError, setApplyError] = useState<string | null>(null);
   useEffect(() => setEdits({}), [summaryQuery.data]);
 
   function rowKey(row: { title: string; category: string }): string {
@@ -146,18 +147,23 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
       reassignCategory(vars.title, vars.fromCategory, vars.toCategory),
   });
 
-  const filterOptions = ['All', ...categories, 'Uncategorized', 'Ignored'];
+  const filterOptions = ['All', ...new Set([...categories, 'Uncategorized', 'Ignored'])];
   const categoryOptions = [...categories, 'Uncategorized', 'Ignored'];
   const rows = summaryQuery.data?.rows ?? [];
   const changedCount = rows.filter((row) => edits[rowKey(row)] && edits[rowKey(row)] !== row.category).length;
 
   async function handleApply() {
+    setApplyError(null);
     const changedRows = rows.filter((row) => edits[rowKey(row)] && edits[rowKey(row)] !== row.category);
-    for (const row of changedRows) {
-      await reassignMutation.mutateAsync({ title: row.title, fromCategory: row.category, toCategory: edits[rowKey(row)] });
+    try {
+      for (const row of changedRows) {
+        await reassignMutation.mutateAsync({ title: row.title, fromCategory: row.category, toCategory: edits[rowKey(row)] });
+      }
+      setEdits({});
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+    } catch (err) {
+      setApplyError(err instanceof ApiError ? err.message : 'Failed to apply changes.');
     }
-    setEdits({});
-    queryClient.invalidateQueries({ queryKey: ['categories'] });
   }
 
   return (
@@ -218,6 +224,7 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
             </Button>
           </div>
           {reassignMutation.isSuccess && changedCount === 0 && <AlertBanner kind="success">Changes applied.</AlertBanner>}
+          {applyError && <AlertBanner kind="error">{applyError}</AlertBanner>}
         </>
       )}
     </>

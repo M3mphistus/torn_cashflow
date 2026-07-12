@@ -36,6 +36,8 @@ useful for UI work without standing up the backend. It's excluded from productio
 - **Publish directory**: `dist`
 - **Environment variable**: `VITE_API_BASE_URL` — the deployed backend's base URL (no trailing
   `/api`), e.g. `https://torn-cashflow-backend.onrender.com`.
+- `public/_redirects` rewrites all paths to `index.html` so client-side routes like `/dashboard`
+  don't 404 on refresh or direct navigation.
 
 Static Sites on Render don't spin down — only the backend Web Service does. The shell loads
 instantly; only the first API call after backend idle is slow (the app shows a "waking up the

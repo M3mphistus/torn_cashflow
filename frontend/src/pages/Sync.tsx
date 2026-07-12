@@ -48,6 +48,7 @@ export default function SyncPage() {
       queryClient.invalidateQueries({ queryKey: ['snapshots'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['log-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
     },
   });
 
@@ -64,6 +65,7 @@ export default function SyncPage() {
       queryClient.invalidateQueries({ queryKey: ['snapshots'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['log-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
     }
   }, [fullHistoryJob.data?.status, queryClient]);
 
@@ -202,11 +204,26 @@ export default function SyncPage() {
             </Button>
           </div>
           {noteMutation.isSuccess && <AlertBanner kind="success">Note saved.</AlertBanner>}
+          {noteMutation.isError && (
+            <AlertBanner kind="error">
+              {noteMutation.error instanceof ApiError ? noteMutation.error.message : 'Failed to save note.'}
+            </AlertBanner>
+          )}
         </div>
       )}
 
       <hr />
       <SectionHeading>Uncategorized Log Entries</SectionHeading>
+      {saveEntryMutation.isError && (
+        <AlertBanner kind="error">
+          {saveEntryMutation.error instanceof ApiError ? saveEntryMutation.error.message : 'Failed to save entry.'}
+        </AlertBanner>
+      )}
+      {ignoreEntryMutation.isError && (
+        <AlertBanner kind="error">
+          {ignoreEntryMutation.error instanceof ApiError ? ignoreEntryMutation.error.message : 'Failed to ignore entry.'}
+        </AlertBanner>
+      )}
       {!uncategorizedQuery.data || uncategorizedQuery.data.entries.length === 0 ? (
         <AlertBanner kind="info">No uncategorized log entries.</AlertBanner>
       ) : (
@@ -232,6 +249,11 @@ export default function SyncPage() {
 
       <hr />
       <SectionHeading>Ignored Log Entries</SectionHeading>
+      {restoreEntryMutation.isError && (
+        <AlertBanner kind="error">
+          {restoreEntryMutation.error instanceof ApiError ? restoreEntryMutation.error.message : 'Failed to restore entry.'}
+        </AlertBanner>
+      )}
       {!ignoredQuery.data || ignoredQuery.data.entries.length === 0 ? (
         <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>No ignored log entries.</p>
       ) : (

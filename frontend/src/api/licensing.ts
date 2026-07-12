@@ -22,7 +22,7 @@ export function scanPayment(lookbackDays = 7): Promise<ScanPaymentResultDTO> {
   });
 }
 
-export function getFactionPreview(): Promise<FactionPreviewDTO | null> {
+export function getFactionPreview(): Promise<FactionPreviewDTO | null | undefined> {
   return apiFetch('/api/licensing/faction-preview');
 }
 
