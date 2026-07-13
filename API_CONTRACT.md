@@ -1,10 +1,9 @@
 # API Contract — Torn Cashflow (React + FastAPI rewrite)
 
 This is the single source of truth for the REST contract between the backend (FastAPI) and
-frontend (React). **Both `BACKEND_PROMPT.md` and `FRONTEND_PROMPT.md` reference this file —
-if you are implementing either side, follow this exactly rather than improvising field names
-or shapes.** The two sides are being built in separate, isolated AI sessions with no way to
-ask each other questions, so drift here is the single biggest risk to the whole rewrite.
+frontend (React). Follow this exactly rather than improvising field names or shapes when
+changing either side — the two live independently and drift here is the easiest way to break
+them against each other silently.
 
 ## Global conventions
 
@@ -70,8 +69,9 @@ Errors: `400` empty/malformed key; `401` with `tornErrorCode` when Torn rejects 
 (most commonly code `2`, "Incorrect API key"); `502` on `TornNetworkError` (Torn unreachable/timeout).
 
 ### `POST /api/auth/logout`
-Clears the session cookie server-side (and should clear/leave the stored `players.api_key` —
-your call, see `BACKEND_PROMPT.md`). Response `204`.
+Clears the session cookie server-side. The stored, encrypted `players.api_key` is left in place
+(a later login for the same player just overwrites it) — logging out only ends the browser
+session, it doesn't forget the account. Response `204`.
 
 ### `GET /api/auth/me`
 Response `200`: `{ "player": PlayerDTO, "premium": PremiumStatusDTO }` if the session cookie is
@@ -126,9 +126,9 @@ Response `200`:
 handling above.
 
 ### `POST /api/sync/full-history`
-**Premium-gated** (`403 premium_required` if not Premium). Starts an async background job —
-see `BACKEND_PROMPT.md` for why this cannot be synchronous on Render's free tier. Immediately
-returns without waiting for completion.
+**Premium-gated** (`403 premium_required` if not Premium). Starts an async background job — a
+synchronous request would exceed Render's free-tier ~30s request timeout for any account with
+meaningful history. Immediately returns without waiting for completion.
 
 Response `202`:
 ```json
@@ -170,7 +170,7 @@ Response `200`: `{ "snapshot": SnapshotDTO | null }`.
 ### `PATCH /api/snapshots/{id}/note`
 Request: `{ "note": "text" }`. Response `200`: `{ "snapshot": SnapshotDTO }`.
 
-**`SnapshotDTO`** (camelCase mirror of the `api_snapshots` table — see `BACKEND_PROMPT.md` for
+**`SnapshotDTO`** (camelCase mirror of the `api_snapshots` table — see `backend/app/db.py` for
 the full column list):
 ```json
 {

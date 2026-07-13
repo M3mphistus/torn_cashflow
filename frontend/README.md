@@ -1,9 +1,6 @@
 # Torn Cashflow — React frontend
 
-Vite + React + TypeScript frontend serving the FastAPI backend per `../API_CONTRACT.md`. See
-`../FRONTEND_PROMPT.md` for the full design rationale and
-`docs/superpowers/specs/2026-07-12-react-frontend-design.md` for the architecture decisions made
-during the build.
+Vite + React + TypeScript frontend serving the FastAPI backend per `../API_CONTRACT.md`.
 
 ## Local development
 

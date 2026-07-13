@@ -7,3 +7,5 @@ venv/
 .streamlit/secrets.toml
 Design/
 .claude/
+GO_LIVE_CHECKLIST.md
+console.log
