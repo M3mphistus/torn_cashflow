@@ -35,6 +35,7 @@ def _check_payments_after_sync(player: CurrentPlayer) -> str | None:
 
 def _categorize_entries(player_id: int, entries: list[dict], war_mode_active: bool) -> list[dict]:
     rules = db.get_all_category_rules(player_id)
+    sign_overrides = db.get_category_sign_overrides(player_id)
     prepared = []
     for entry in entries:
         title = entry.get("title")
@@ -43,7 +44,11 @@ def _categorize_entries(player_id: int, entries: list[dict], war_mode_active: bo
             app_category = calculations.auto_categorize(title, entry.get("category"), war_mode_active)
         if app_category == "Uncategorized" and entry.get("amount") is None:
             app_category = calculations.IGNORED_CATEGORY
-        prepared.append({**entry, "app_category": app_category})
+        amount = entry.get("amount")
+        sign = sign_overrides.get(title) if title else None
+        if sign is not None and amount is not None:
+            amount = abs(amount) * sign
+        prepared.append({**entry, "app_category": app_category, "amount": amount})
     return prepared
 
 

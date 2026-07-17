@@ -43,16 +43,9 @@ class TornNetworkError(Exception):
     pass
 
 
-def _request(selections: str, api_key: str, extra_params: dict | None = None) -> dict:
-    if not api_key:
-        raise TornAPIError(ERROR_MESSAGES[1], code=1)
-
-    params = {"selections": selections, "key": api_key}
-    if extra_params:
-        params.update(extra_params)
-
+def _send_request(url: str, params: dict) -> dict:
     try:
-        response = requests.get(f"{BASE_URL}/user/", params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+        response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
     except requests.exceptions.Timeout:
         raise TornNetworkError("Torn API request timed out.")
@@ -70,6 +63,17 @@ def _request(selections: str, api_key: str, extra_params: dict | None = None) ->
         raise TornAPIError(message, code=code)
 
     return data
+
+
+def _request(selections: str, api_key: str, extra_params: dict | None = None) -> dict:
+    if not api_key:
+        raise TornAPIError(ERROR_MESSAGES[1], code=1)
+
+    params = {"selections": selections, "key": api_key}
+    if extra_params:
+        params.update(extra_params)
+
+    return _send_request(f"{BASE_URL}/user/", params)
 
 
 def get_bars(api_key: str) -> dict:
@@ -255,26 +259,7 @@ def get_faction_member_ids(api_key: str, faction_id: int) -> list[int] | None:
 
 
 def _request_faction(faction_id: int, api_key: str) -> dict:
-    params = {"selections": "basic", "key": api_key}
-    try:
-        response = requests.get(f"{BASE_URL}/faction/{faction_id}", params=params, timeout=REQUEST_TIMEOUT_SECONDS)
-        response.raise_for_status()
-    except requests.exceptions.Timeout:
-        raise TornNetworkError("Torn API request timed out.")
-    except requests.exceptions.RequestException:
-        raise TornNetworkError("Could not reach the Torn API. Check your internet connection.")
-
-    try:
-        data = response.json()
-    except ValueError:
-        raise TornNetworkError("Torn API returned an unreadable response.")
-
-    if isinstance(data, dict) and "error" in data:
-        code = data["error"].get("code")
-        message = ERROR_MESSAGES.get(code, data["error"].get("error", "Unknown Torn API error."))
-        raise TornAPIError(message, code=code)
-
-    return data
+    return _send_request(f"{BASE_URL}/faction/{faction_id}", {"selections": "basic", "key": api_key})
 
 
 ITEM_SEND_TITLE = "Item send"

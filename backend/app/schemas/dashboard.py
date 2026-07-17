@@ -30,3 +30,8 @@ class DashboardResponse(CamelModel):
     daily_cashflow: list[DailyCashflowDTO]
     daily_networth: list[DailyNetworthDTO]
     snapshots: list[SnapshotDTO]
+
+
+class DashboardBoundsResponse(CamelModel):
+    min_ts: int | None
+    max_ts: int | None

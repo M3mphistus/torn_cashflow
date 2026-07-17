@@ -91,6 +91,12 @@ export const handlers = [
     return HttpResponse.json({ snapshot });
   }),
 
+  http.get('/api/dashboard/bounds', () => {
+    const timestamps = [...mockSnapshots.map((s) => s.syncedAt), ...mockLogEntries.map((e) => e.timestamp)];
+    if (timestamps.length === 0) return HttpResponse.json({ minTs: null, maxTs: null });
+    return HttpResponse.json({ minTs: Math.min(...timestamps), maxTs: Math.max(...timestamps) });
+  }),
+
   http.get('/api/dashboard', ({ request }) => {
     const url = new URL(request.url);
     const startTs = Number(url.searchParams.get('startTs'));

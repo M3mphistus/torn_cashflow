@@ -194,6 +194,10 @@ def init_db() -> None:
             )
             """
         )
+        # New for the Categories sign-correction feature: an optional per-title amount-sign
+        # override (1 or -1). NULL means "no override" — the sign shown/used is whatever Torn
+        # itself reported.
+        conn.execute("ALTER TABLE category_rules ADD COLUMN IF NOT EXISTS amount_sign SMALLINT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS categories (
@@ -522,6 +526,17 @@ def get_snapshots(torn_player_id: int, start_ts: int | None = None, end_ts: int 
         return conn.execute(query, params).fetchall()
 
 
+def get_snapshot_timestamp_range(torn_player_id: int) -> tuple[int, int] | None:
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT MIN(synced_at) AS min_ts, MAX(synced_at) AS max_ts FROM api_snapshots WHERE torn_player_id = %s",
+            (torn_player_id,),
+        ).fetchone()
+    if row is None or row["min_ts"] is None:
+        return None
+    return row["min_ts"], row["max_ts"]
+
+
 def get_snapshot_by_id(torn_player_id: int, snapshot_id: int) -> dict | None:
     with get_pool().connection() as conn:
         return conn.execute(
@@ -684,6 +699,40 @@ def get_all_category_rules(torn_player_id: int) -> dict[str, str]:
         return {row["title"]: row["app_category"] for row in rows}
 
 
+def get_category_sign_overrides(torn_player_id: int) -> dict[str, int]:
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            "SELECT title, amount_sign FROM category_rules WHERE torn_player_id = %s AND amount_sign IS NOT NULL",
+            (torn_player_id,),
+        ).fetchall()
+        return {row["title"]: row["amount_sign"] for row in rows}
+
+
+def upsert_category_sign(torn_player_id: int, title: str, app_category: str, amount_sign: int) -> None:
+    """Persists a title-level sign override. Also pins the category for this title (same as
+    upsert_category_rule) since category_rules has no separate sign-only row shape — the row
+    being edited always has a category in view, so this is a natural, not surprising, pairing."""
+    with get_pool().connection() as conn:
+        conn.execute(
+            "INSERT INTO category_rules (torn_player_id, title, app_category, amount_sign) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (torn_player_id, title) DO UPDATE "
+            "SET app_category = excluded.app_category, amount_sign = excluded.amount_sign",
+            (torn_player_id, title, app_category, amount_sign),
+        )
+
+
+def apply_amount_sign(torn_player_id: int, title: str, amount_sign: int) -> int:
+    """Retroactively forces the sign of every stored entry with this title (regardless of its
+    current category) — mirrors how a category reassignment applies across all matching entries."""
+    with get_pool().connection() as conn:
+        cur = conn.execute(
+            "UPDATE log_entries SET amount = ABS(amount) * %s "
+            "WHERE torn_player_id = %s AND title = %s AND amount IS NOT NULL",
+            (amount_sign, torn_player_id, title),
+        )
+        return cur.rowcount
+
+
 def reassign_category(torn_player_id: int, title: str, from_category: str, to_category: str) -> int:
     with get_pool().connection() as conn:
         cur = conn.execute(
@@ -735,12 +784,19 @@ def get_category_counts(torn_player_id: int) -> dict[str, int]:
 
 
 def get_title_category_summary(torn_player_id: int, filter_category: str | None = None) -> list[dict]:
-    query = "SELECT title, app_category, COUNT(*) AS c FROM log_entries WHERE torn_player_id = %s"
+    query = (
+        "SELECT le.title, le.app_category, COUNT(*) AS c, "
+        "(ARRAY_AGG(le.amount ORDER BY le.timestamp DESC) FILTER (WHERE le.amount IS NOT NULL))[1] AS example_amount, "
+        "cr.amount_sign AS amount_sign "
+        "FROM log_entries le "
+        "LEFT JOIN category_rules cr ON cr.torn_player_id = le.torn_player_id AND cr.title = le.title "
+        "WHERE le.torn_player_id = %s"
+    )
     params = [torn_player_id]
     if filter_category:
-        query += " AND app_category = %s"
+        query += " AND le.app_category = %s"
         params.append(filter_category)
-    query += " GROUP BY title, app_category ORDER BY title"
+    query += " GROUP BY le.title, le.app_category, cr.amount_sign ORDER BY le.title"
     with get_pool().connection() as conn:
         return conn.execute(query, params).fetchall()
 
@@ -893,3 +949,5 @@ def fail_sync_job(job_id: int, error: str) -> None:
 def get_sync_job(job_id: int) -> dict | None:
     with get_pool().connection() as conn:
         return conn.execute("SELECT * FROM sync_jobs WHERE id = %s", (job_id,)).fetchone()
+
+

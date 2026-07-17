@@ -54,7 +54,16 @@ def title_summary(
 ) -> TitleSummaryResponse:
     rows = db.get_title_category_summary(player.player_id, filter_category)
     return TitleSummaryResponse(
-        rows=[TitleSummaryRowDTO(title=r["title"], category=r["app_category"], entry_count=r["c"]) for r in rows]
+        rows=[
+            TitleSummaryRowDTO(
+                title=r["title"],
+                category=r["app_category"],
+                entry_count=r["c"],
+                example_amount=r["example_amount"],
+                amount_sign=r["amount_sign"],
+            )
+            for r in rows
+        ]
     )
 
 
@@ -65,4 +74,7 @@ def reassign(
     count = db.reassign_category(player.player_id, body.title, body.from_category, body.to_category)
     if body.title:
         db.upsert_category_rule(player.player_id, body.title, body.to_category)
+        if body.amount_sign is not None:
+            db.upsert_category_sign(player.player_id, body.title, body.to_category, body.amount_sign)
+            db.apply_amount_sign(player.player_id, body.title, body.amount_sign)
     return UpdatedCountResponse(updated_count=count)

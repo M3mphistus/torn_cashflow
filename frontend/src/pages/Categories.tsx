@@ -7,6 +7,8 @@ import SectionHeading from '../components/ui/SectionHeading';
 import AlertBanner from '../components/ui/AlertBanner';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import { formatCurrency } from '../lib/format';
+import type { TitleSummaryRow } from '../types/api';
 
 const RESERVED_NAMES = new Set(['Uncategorized', 'Ignored']);
 
@@ -40,12 +42,16 @@ function CategoriesContent() {
       setNewCategoryName('');
       setAddError(null);
       queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (err) => setAddError(err instanceof ApiError ? err.message : 'Something went wrong.'),
   });
   const deleteMutation = useMutation({
     mutationFn: deleteCategory,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 
   function handleAddCategory(e: FormEvent) {
@@ -121,15 +127,27 @@ function CategoriesContent() {
   );
 }
 
+function effectiveSign(row: TitleSummaryRow): 1 | -1 {
+  if (row.amountSign !== null) return row.amountSign;
+  if (row.exampleAmount !== null && row.exampleAmount < 0) return -1;
+  return 1;
+}
+
+interface RowEdit {
+  category?: string;
+  sign?: 1 | -1;
+}
+
 function ReviewAndRecategorize({ categories }: { categories: string[] }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<string>('All');
+  const [titleSearch, setTitleSearch] = useState('');
   const summaryQuery = useQuery({
     queryKey: ['categories', 'titleSummary', filter],
     queryFn: () => getTitleSummary(filter === 'All' ? undefined : filter),
   });
 
-  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [edits, setEdits] = useState<Record<string, RowEdit>>({});
   const [applyError, setApplyError] = useState<string | null>(null);
   useEffect(() => setEdits({}), [summaryQuery.data]);
 
@@ -137,30 +155,48 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
     return `${row.title}::${row.category}`;
   }
 
-  // Note: Task 4's `reassignCategory` has the positional signature
-  // `(title, fromCategory, toCategory)`, not the single-object signature the plan's
-  // example code assumes. Adapting the mutationFn to that real signature here; the
-  // call site below (`reassignMutation.mutateAsync({...})`) is left exactly as the
-  // brief specifies.
   const reassignMutation = useMutation({
-    mutationFn: (vars: { title: string; fromCategory: string; toCategory: string }) =>
-      reassignCategory(vars.title, vars.fromCategory, vars.toCategory),
+    mutationFn: (vars: { title: string; fromCategory: string; toCategory: string; amountSign: 1 | -1 | null }) =>
+      reassignCategory(vars.title, vars.fromCategory, vars.toCategory, vars.amountSign),
   });
 
   const filterOptions = ['All', ...new Set([...categories, 'Uncategorized', 'Ignored'])];
   const categoryOptions = [...categories, 'Uncategorized', 'Ignored'];
-  const rows = summaryQuery.data?.rows ?? [];
-  const changedCount = rows.filter((row) => edits[rowKey(row)] && edits[rowKey(row)] !== row.category).length;
+  const allRows = summaryQuery.data?.rows ?? [];
+  const rows = titleSearch.trim()
+    ? allRows.filter((row) => (row.title ?? '').toLowerCase().includes(titleSearch.trim().toLowerCase()))
+    : allRows;
+
+  function rowChange(row: TitleSummaryRow): { categoryChanged: boolean; signChanged: boolean } {
+    const edit = edits[rowKey(row)];
+    return {
+      categoryChanged: edit?.category !== undefined && edit.category !== row.category,
+      signChanged: edit?.sign !== undefined && edit.sign !== effectiveSign(row),
+    };
+  }
+
+  const changedRows = allRows.filter((row) => {
+    const { categoryChanged, signChanged } = rowChange(row);
+    return categoryChanged || signChanged;
+  });
 
   async function handleApply() {
     setApplyError(null);
-    const changedRows = rows.filter((row) => edits[rowKey(row)] && edits[rowKey(row)] !== row.category);
     try {
       for (const row of changedRows) {
-        await reassignMutation.mutateAsync({ title: row.title, fromCategory: row.category, toCategory: edits[rowKey(row)] });
+        const edit = edits[rowKey(row)];
+        const { signChanged } = rowChange(row);
+        await reassignMutation.mutateAsync({
+          title: row.title,
+          fromCategory: row.category,
+          toCategory: edit?.category ?? row.category,
+          amountSign: signChanged ? (edit!.sign as 1 | -1) : null,
+        });
       }
       setEdits({});
       queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['log-entries'] });
     } catch (err) {
       setApplyError(err instanceof ApiError ? err.message : 'Failed to apply changes.');
     }
@@ -170,22 +206,38 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
     <>
       <SectionHeading>Review &amp; Recategorize</SectionHeading>
       <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>
-        Every log title seen so far, grouped by its current category. Edit the Category column and
-        click Apply to reassign all matching entries — the choice is also remembered for future
-        syncs.
+        Every log title seen so far, grouped by its current category. Edit the Category or Sign
+        column and click Apply to reassign/re-sign all matching entries — both choices are also
+        remembered for future syncs.
       </p>
 
-      <label htmlFor="title-filter">Filter by category</label>
-      <select id="title-filter" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 240 }}>
-        {filterOptions.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 8 }}>
+        <div>
+          <label htmlFor="title-filter">Filter by category</label>
+          <select id="title-filter" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 240 }}>
+            {filterOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="title-search">Search title</label>
+          <input
+            id="title-search"
+            value={titleSearch}
+            onChange={(e) => setTitleSearch(e.target.value)}
+            placeholder="e.g. Attacked player"
+            style={{ maxWidth: 240 }}
+          />
+        </div>
+      </div>
 
-      {rows.length === 0 ? (
+      {allRows.length === 0 ? (
         <AlertBanner kind="info">No log entries yet.</AlertBanner>
+      ) : rows.length === 0 ? (
+        <AlertBanner kind="info">No titles match "{titleSearch}".</AlertBanner>
       ) : (
         <>
           <table>
@@ -193,37 +245,53 @@ function ReviewAndRecategorize({ categories }: { categories: string[] }) {
               <tr>
                 <th>Title</th>
                 <th>Entries</th>
+                <th>Amount</th>
+                <th>Sign</th>
                 <th>Category</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={rowKey(row)}>
-                  <td>{row.title}</td>
-                  <td>{row.entryCount}</td>
-                  <td>
-                    <select
-                      value={edits[rowKey(row)] ?? row.category}
-                      onChange={(e) => setEdits((prev) => ({ ...prev, [rowKey(row)]: e.target.value }))}
-                    >
-                      {categoryOptions.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((row) => {
+                const key = rowKey(row);
+                const sign = edits[key]?.sign ?? effectiveSign(row);
+                return (
+                  <tr key={key}>
+                    <td>{row.title}</td>
+                    <td>{row.entryCount}</td>
+                    <td>{formatCurrency(row.exampleAmount)}</td>
+                    <td>
+                      <Button
+                        onClick={() => setEdits((prev) => ({ ...prev, [key]: { ...prev[key], sign: sign === 1 ? -1 : 1 } }))}
+                        disabled={row.exampleAmount === null}
+                        title={row.exampleAmount === null ? 'No detected amount to sign' : 'Flip sign for every entry with this title'}
+                      >
+                        {sign === 1 ? '+' : '−'}
+                      </Button>
+                    </td>
+                    <td>
+                      <select
+                        value={edits[key]?.category ?? row.category}
+                        onChange={(e) => setEdits((prev) => ({ ...prev, [key]: { ...prev[key], category: e.target.value } }))}
+                      >
+                        {categoryOptions.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
           <div style={{ marginTop: 12 }}>
-            <Button variant="primary" onClick={handleApply} disabled={changedCount === 0 || reassignMutation.isPending}>
+            <Button variant="primary" onClick={handleApply} disabled={changedRows.length === 0 || reassignMutation.isPending}>
               Apply changes
             </Button>
           </div>
-          {reassignMutation.isSuccess && changedCount === 0 && <AlertBanner kind="success">Changes applied.</AlertBanner>}
+          {reassignMutation.isSuccess && changedRows.length === 0 && <AlertBanner kind="success">Changes applied.</AlertBanner>}
           {applyError && <AlertBanner kind="error">{applyError}</AlertBanner>}
         </>
       )}

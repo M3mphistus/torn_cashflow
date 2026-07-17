@@ -18,9 +18,14 @@ export function getTitleSummary(filterCategory?: string): Promise<{ rows: TitleS
   return apiFetch(`/api/categories/title-summary${qs}`);
 }
 
-export function reassignCategory(title: string, fromCategory: string, toCategory: string): Promise<{ updatedCount: number }> {
+export function reassignCategory(
+  title: string,
+  fromCategory: string,
+  toCategory: string,
+  amountSign?: 1 | -1 | null,
+): Promise<{ updatedCount: number }> {
   return apiFetch('/api/categories/reassign', {
     method: 'POST',
-    body: JSON.stringify({ title, fromCategory, toCategory }),
+    body: JSON.stringify({ title, fromCategory, toCategory, amountSign: amountSign ?? null }),
   });
 }

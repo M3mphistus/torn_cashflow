@@ -195,11 +195,19 @@ the full column list):
 }
 ```
 
+### `GET /api/dashboard/bounds`
+Response `200`: `{ "minTs": 1690000000, "maxTs": 1730000000 }` (both `null` if the player has
+neither snapshots nor log entries yet). This is the full available span across **both**
+snapshots and log entries — a snapshot only marks a sync moment, but a Full History Sync pulls
+log entries reaching back far earlier than any snapshot. The frontend must use this endpoint
+(not just the snapshot list) to compute the Dashboard's time-range preset bounds, or "All time"
+and every relative preset silently clip out real, older cashflow data.
+
 ### `GET /api/dashboard?startTs=&endTs=`
 The one aggregate endpoint for the whole Dashboard page — computed server-side (reusing
 `calculations.py` logic) so the frontend never has to reimplement pandas-equivalent math in
 JS. Both params required (frontend resolves the selected time-range preset to concrete
-timestamps before calling).
+timestamps before calling — via `GET /api/dashboard/bounds`, not the snapshot list).
 
 Response `200`:
 ```json
@@ -296,13 +304,36 @@ old UI disabled the delete button in this case; the backend is the enforcement p
 ### `GET /api/categories/title-summary?filterCategory=`
 `filterCategory` optional. Response `200`:
 ```json
-{ "rows": [ { "title": "Attacked player X", "category": "Ranked War", "entryCount": 6 } ] }
+{
+  "rows": [
+    {
+      "title": "Attacked player X",
+      "category": "Ranked War",
+      "entryCount": 6,
+      "exampleAmount": 42000,
+      "amountSign": null
+    }
+  ]
+}
 ```
+`exampleAmount` is one representative entry's amount for this title (most recent non-null
+amount in the group), for display only — `null` if no entry in the group has a detected amount.
+`amountSign` is `1 | -1 | null`: `null` means no manual sign override is on file for this title
+(the amount is whatever Torn/the app's auto-extraction already produced); `1`/`-1` means the
+player has explicitly forced this title's sign (see reassign below) and it's being enforced on
+every synced entry with this title, past and future.
 
 ### `POST /api/categories/reassign`
-Request: `{ "title": "Attacked player X", "fromCategory": "Uncategorized", "toCategory": "Ranked War" }`.
-Bulk-reassigns every entry matching `title` + `fromCategory`, and upserts the category rule.
-Response `200`: `{ "updatedCount": 6 }`.
+Request: `{ "title": "Attacked player X", "fromCategory": "Uncategorized", "toCategory": "Ranked War", "amountSign": null }`.
+`amountSign` is optional (`1 | -1`, omit/`null` to leave the sign untouched). Bulk-reassigns every
+entry matching `title` + `fromCategory`, and upserts the category rule. When `amountSign` is
+provided, additionally forces every stored entry with this `title` (regardless of category) to
+`abs(amount) * amountSign`, and persists the override so future syncs apply it too — setting a
+sign override always pins the category alongside it (`toCategory`), since `category_rules` has
+no sign-only row shape; this is a natural pairing given the UI always has a category selected
+for the row being edited, not a hidden side effect to design around.
+Response `200`: `{ "updatedCount": 6 }` (count reflects the category-reassignment scope; the sign
+correction's own affected-row count isn't separately surfaced).
 
 ---
 

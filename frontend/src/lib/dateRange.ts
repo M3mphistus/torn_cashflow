@@ -1,4 +1,4 @@
-export type TimeRangePreset = 'last7' | 'last30' | 'last90' | 'custom' | 'all';
+export type TimeRangePreset = 'today' | 'yesterday' | 'last7' | 'last30' | 'last90' | 'custom' | 'all';
 
 export interface TimeRangeBounds {
   minTs: number;
@@ -11,6 +11,10 @@ export interface ResolvedRange {
 }
 
 const DAY_SECONDS = 86400;
+
+function startOfUtcDay(ts: number): number {
+  return Math.floor(ts / DAY_SECONDS) * DAY_SECONDS;
+}
 
 export function resolveTimeRange(
   preset: TimeRangePreset,
@@ -25,6 +29,18 @@ export function resolveTimeRange(
       startTs: Math.max(minTs, custom.startTs),
       endTs: Math.min(maxTs, custom.endTs),
     };
+  }
+
+  // "Today"/"yesterday" anchor to the calendar day of maxTs (the latest data point), not the
+  // browser's current date - if the last sync was a while ago, real "today" would otherwise be
+  // an empty range even though the data itself is fine, which reads as "broken" to a user.
+  if (preset === 'today') {
+    const dayStart = startOfUtcDay(maxTs);
+    return { startTs: Math.max(minTs, dayStart), endTs: Math.min(maxTs, dayStart + DAY_SECONDS - 1) };
+  }
+  if (preset === 'yesterday') {
+    const todayStart = startOfUtcDay(maxTs);
+    return { startTs: Math.max(minTs, todayStart - DAY_SECONDS), endTs: Math.min(maxTs, todayStart - 1) };
   }
 
   const endTs = maxTs;

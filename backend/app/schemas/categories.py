@@ -22,6 +22,8 @@ class TitleSummaryRowDTO(CamelModel):
     title: str | None
     category: str
     entry_count: int
+    example_amount: float | None = None
+    amount_sign: int | None = None
 
 
 class TitleSummaryResponse(CamelModel):
@@ -32,6 +34,7 @@ class ReassignCategoryRequest(CamelModel):
     title: str
     from_category: str
     to_category: str
+    amount_sign: int | None = None
 
 
 class UpdatedCountResponse(CamelModel):

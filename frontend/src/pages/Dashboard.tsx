@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getDashboard } from '../api/dashboard';
-import { getSnapshots } from '../api/snapshots';
+import { useAuth } from '../hooks/useAuth';
+import { getDashboard, getDashboardBounds } from '../api/dashboard';
+import { syncIncremental, startFullHistorySync, getFullHistoryJob } from '../api/sync';
+import { ApiError } from '../api/client';
 import KpiCard from '../components/ui/KpiCard';
 import SectionHeading from '../components/ui/SectionHeading';
 import AlertBanner from '../components/ui/AlertBanner';
@@ -12,7 +14,33 @@ import { resolveTimeRange, type TimeRangePreset } from '../lib/dateRange';
 import { snapshotsToCsv, downloadCsv } from '../lib/csv';
 import type { SnapshotDTO } from '../types/api';
 
+function useFullHistoryJob(jobId: number | null) {
+  const [lastProgressKey, setLastProgressKey] = useState('');
+  const [lastProgressAt, setLastProgressAt] = useState(Date.now());
+
+  const query = useQuery({
+    queryKey: ['syncJob', jobId],
+    queryFn: () => getFullHistoryJob(jobId as number),
+    enabled: jobId !== null,
+    refetchInterval: (q) => (q.state.data?.status === 'running' ? 2500 : false),
+  });
+
+  useEffect(() => {
+    if (!query.data) return;
+    const key = `${query.data.pagesFetched}-${query.data.entriesFetched}`;
+    if (key !== lastProgressKey) {
+      setLastProgressKey(key);
+      setLastProgressAt(Date.now());
+    }
+  }, [query.data, lastProgressKey]);
+
+  const isStalled = query.data?.status === 'running' && Date.now() - lastProgressAt > 60000;
+  return { ...query, isStalled };
+}
+
 const PRESETS: { value: TimeRangePreset; label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
   { value: 'last7', label: 'Last 7 days' },
   { value: 'last30', label: 'Last 30 days' },
   { value: 'last90', label: 'Last 90 days' },
@@ -30,6 +58,9 @@ function fromDateInputValue(value: string, endOfDay: boolean): number {
 }
 
 const chartTooltipStyle = { background: 'var(--panel-2)', border: '1px solid var(--line-lit)' };
+const chartTooltipLabelStyle = { color: 'var(--text-mute)' };
+const chartTooltipItemStyle = { color: 'var(--text)' };
+const chartTooltipCursor = { fill: 'var(--gold)', fillOpacity: 0.08 };
 
 export default function DashboardPage() {
   const [preset, setPreset] = useState<TimeRangePreset>('last30');
@@ -37,13 +68,13 @@ export default function DashboardPage() {
   const [customEnd, setCustomEnd] = useState<string | null>(null);
   const [tab, setTab] = useState<'cashflow' | 'networth'>('cashflow');
 
-  const boundsQuery = useQuery({ queryKey: ['snapshots', 'all'], queryFn: () => getSnapshots() });
-  const snapshots = useMemo(() => boundsQuery.data?.snapshots ?? [], [boundsQuery.data]);
+  const boundsQuery = useQuery({ queryKey: ['dashboard', 'bounds'], queryFn: getDashboardBounds });
 
   const bounds = useMemo(() => {
-    if (snapshots.length === 0) return null;
-    return { minTs: snapshots[0].syncedAt, maxTs: snapshots[snapshots.length - 1].syncedAt };
-  }, [snapshots]);
+    const { minTs, maxTs } = boundsQuery.data ?? {};
+    if (minTs == null || maxTs == null) return null;
+    return { minTs, maxTs };
+  }, [boundsQuery.data]);
 
   const range = useMemo(() => {
     if (!bounds) return null;
@@ -61,6 +92,95 @@ export default function DashboardPage() {
     enabled: range !== null,
   });
 
+  const { premium } = useAuth();
+  const queryClient = useQueryClient();
+
+  const incrementalMutation = useMutation({
+    mutationFn: syncIncremental,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['snapshots'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['log-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+    },
+  });
+
+  const [fullHistoryJobId, setFullHistoryJobId] = useState<number | null>(null);
+  const [attemptedWithoutPremium, setAttemptedWithoutPremium] = useState(false);
+  const startFullHistoryMutation = useMutation({
+    mutationFn: startFullHistorySync,
+    onSuccess: (data) => setFullHistoryJobId(data.jobId),
+  });
+  const fullHistoryJob = useFullHistoryJob(fullHistoryJobId);
+
+  useEffect(() => {
+    if (fullHistoryJob.data?.status === 'completed') {
+      queryClient.invalidateQueries({ queryKey: ['snapshots'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['log-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+    }
+  }, [fullHistoryJob.data?.status, queryClient]);
+
+  const syncControls = (
+    <>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '16px 0' }}>
+        <Button variant="primary" onClick={() => incrementalMutation.mutate()} disabled={incrementalMutation.isPending}>
+          {incrementalMutation.isPending ? 'Syncing…' : 'Sync now'}
+        </Button>
+        <Button
+          onClick={() => {
+            if (!premium?.isPremium) {
+              setAttemptedWithoutPremium(true);
+              return;
+            }
+            startFullHistoryMutation.mutate();
+          }}
+          disabled={startFullHistoryMutation.isPending || fullHistoryJob.data?.status === 'running'}
+        >
+          Get all Data
+        </Button>
+      </div>
+
+      {incrementalMutation.isSuccess && (
+        <AlertBanner kind="success">
+          Sync complete. Stored 1 snapshot and {incrementalMutation.data.logEntriesStored} log entries.
+          {incrementalMutation.data.paymentMessage && <> {incrementalMutation.data.paymentMessage}</>}
+        </AlertBanner>
+      )}
+      {incrementalMutation.isError && (
+        <AlertBanner kind="error">
+          {incrementalMutation.error instanceof ApiError ? incrementalMutation.error.message : 'Sync failed.'}
+        </AlertBanner>
+      )}
+      {attemptedWithoutPremium && !premium?.isPremium && (
+        <AlertBanner kind="warning">
+          Full History Sync is a Premium feature. Start your free trial, pay with Xanax, or check faction options on the Settings page.
+        </AlertBanner>
+      )}
+      {fullHistoryJobId !== null && fullHistoryJob.data && (
+        <AlertBanner kind={fullHistoryJob.data.status === 'failed' ? 'error' : 'info'}>
+          {fullHistoryJob.data.status === 'running' && (
+            <>
+              Page {fullHistoryJob.data.pagesFetched}: {fullHistoryJob.data.entriesFetched} log entries fetched so
+              far
+              {fullHistoryJob.data.oldestTimestamp && ` (oldest so far: ${formatTimestamp(fullHistoryJob.data.oldestTimestamp)})`}…
+              {fullHistoryJob.isStalled && ' This looks stalled — you can retry below.'}
+            </>
+          )}
+          {fullHistoryJob.data.status === 'completed' && fullHistoryJob.data.result && (
+            <>
+              Full history sync complete. {fullHistoryJob.data.result.newEntriesStored} new log entries (
+              {fullHistoryJob.data.result.alreadyStored} were already stored).
+            </>
+          )}
+          {fullHistoryJob.data.status === 'failed' && <>Full history sync failed: {fullHistoryJob.data.error}</>}
+        </AlertBanner>
+      )}
+      {fullHistoryJob.isStalled && <Button onClick={() => startFullHistoryMutation.mutate()}>Retry</Button>}
+    </>
+  );
+
   if (boundsQuery.isLoading) {
     return (
       <div className="page">
@@ -70,11 +190,12 @@ export default function DashboardPage() {
     );
   }
 
-  if (snapshots.length === 0) {
+  if (bounds === null) {
     return (
       <div className="page">
         <h1>Dashboard</h1>
-        <AlertBanner kind="info">Need at least one synced snapshot. Go to Sync first.</AlertBanner>
+        {syncControls}
+        <AlertBanner kind="info">Need at least one synced snapshot — click "Sync now" above.</AlertBanner>
       </div>
     );
   }
@@ -86,6 +207,9 @@ export default function DashboardPage() {
   return (
     <div className="page">
       <h1>Dashboard</h1>
+
+      {syncControls}
+      <hr />
 
       <div className="tabs" role="tablist" aria-label="Time range">
         {PRESETS.map((p) => (
@@ -141,7 +265,7 @@ export default function DashboardPage() {
                 <CartesianGrid stroke="var(--line)" horizontal={false} />
                 <XAxis type="number" stroke="var(--text-mute)" tickFormatter={(v: number) => formatCurrency(v)} />
                 <YAxis type="category" dataKey="category" stroke="var(--text-mute)" width={140} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} />
+                <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} cursor={chartTooltipCursor} />
                 <Bar dataKey="amount">
                   {sortedCategoryBreakdown.map((row) => (
                     <Cell key={row.category} fill={row.amount >= 0 ? 'var(--gold)' : 'var(--red)'} />
@@ -195,7 +319,7 @@ export default function DashboardPage() {
                   <CartesianGrid stroke="var(--line)" />
                   <XAxis dataKey="date" stroke="var(--text-mute)" />
                   <YAxis stroke="var(--text-mute)" tickFormatter={(v: number) => formatCurrency(v)} />
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} />
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} cursor={chartTooltipCursor} />
                   <Bar dataKey="cashflowDelta" fill="var(--gold)" />
                 </BarChart>
               </ResponsiveContainer>
@@ -208,7 +332,7 @@ export default function DashboardPage() {
                 <CartesianGrid stroke="var(--line)" />
                 <XAxis dataKey="date" stroke="var(--text-mute)" />
                 <YAxis stroke="var(--text-mute)" tickFormatter={(v: number) => formatCurrency(v)} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} />
+                <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
                 <Line type="monotone" dataKey="networth" stroke="var(--gold-bright)" dot={false} />
               </LineChart>
             </ResponsiveContainer>

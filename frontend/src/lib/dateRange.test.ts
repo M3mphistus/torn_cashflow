@@ -5,6 +5,30 @@ const DAY = 86400;
 const bounds = { minTs: 1_700_000_000, maxTs: 1_700_000_000 + 100 * DAY };
 
 describe('resolveTimeRange', () => {
+  it('today spans the calendar day (UTC) containing maxTs, clamped to bounds', () => {
+    const dayStart = Math.floor(bounds.maxTs / DAY) * DAY;
+    expect(resolveTimeRange('today', bounds)).toEqual({
+      startTs: dayStart,
+      endTs: Math.min(bounds.maxTs, dayStart + DAY - 1),
+    });
+  });
+
+  it('yesterday spans the calendar day (UTC) before maxTs, clamped to bounds', () => {
+    const dayStart = Math.floor(bounds.maxTs / DAY) * DAY;
+    expect(resolveTimeRange('yesterday', bounds)).toEqual({
+      startTs: dayStart - DAY,
+      endTs: dayStart - 1,
+    });
+  });
+
+  it('yesterday floors at minTs when the previous day starts before it', () => {
+    const tightBounds = { minTs: bounds.maxTs - 12 * 3600, maxTs: bounds.maxTs };
+    const dayStart = Math.floor(tightBounds.maxTs / DAY) * DAY;
+    const result = resolveTimeRange('yesterday', tightBounds);
+    expect(result.startTs).toBe(Math.max(tightBounds.minTs, dayStart - DAY));
+    expect(result.endTs).toBe(dayStart - 1);
+  });
+
   it('last7 clamps to 7 days before maxTs, floored at minTs', () => {
     expect(resolveTimeRange('last7', bounds)).toEqual({
       startTs: bounds.maxTs - 7 * DAY,

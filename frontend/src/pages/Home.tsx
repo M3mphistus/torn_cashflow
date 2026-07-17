@@ -40,15 +40,14 @@ export default function HomePage() {
         <p>Last synced at: {formatTimestamp(latest.syncedAt)}</p>
       ) : (
         <AlertBanner kind="info">
-          No sync data yet. <Link to="/sync">Go to Sync</Link> to pull your first snapshot.
+          No sync data yet. <Link to="/dashboard">Go to Dashboard</Link> and click "Sync now" to pull your first snapshot.
         </AlertBanner>
       )}
 
       <hr />
 
       <div className="nav-grid">
-        <NavCard to="/dashboard" title="Dashboard" caption="KPIs, cashflow-by-category, networth breakdown, and the raw snapshot table." />
-        <NavCard to="/sync" title="Sync" caption="Pull fresh data from the Torn API and review auto-categorized log entries." />
+        <NavCard to="/dashboard" title="Dashboard" caption="Sync fresh data, KPIs, cashflow-by-category, networth breakdown, and the raw snapshot table." />
         <NavCard to="/checklist" title="Checklist" caption="Recurring and one-off tasks — daily refills, war prep, and more." />
         <NavCard
           to="/categories"

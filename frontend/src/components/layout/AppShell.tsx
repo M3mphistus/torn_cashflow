@@ -10,7 +10,6 @@ import type { PlayerDTO, PremiumStatusDTO } from '../../types/api';
 const NAV_ITEMS = [
   { to: '/', label: 'Home' },
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/sync', label: 'Sync' },
   { to: '/checklist', label: 'Checklist' },
   { to: '/categories', label: 'Categories' },
   { to: '/settings', label: 'Settings' },

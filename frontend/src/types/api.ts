@@ -93,6 +93,11 @@ export interface DashboardDTO {
   snapshots: SnapshotDTO[];
 }
 
+export interface DashboardBoundsDTO {
+  minTs: number | null;
+  maxTs: number | null;
+}
+
 export interface LogEntryDTO {
   id: number;
   tornLogId: string;
@@ -114,6 +119,8 @@ export interface TitleSummaryRow {
   title: string;
   category: string;
   entryCount: number;
+  exampleAmount: number | null;
+  amountSign: 1 | -1 | null;
 }
 
 export type RepeatType = 'daily' | 'weekly' | 'every_x_days' | 'once' | 'war_day';

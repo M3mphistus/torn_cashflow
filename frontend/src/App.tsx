@@ -7,7 +7,6 @@ import Button from './components/ui/Button';
 import LoginPage from './pages/Login';
 import HomePage from './pages/Home';
 import DashboardPage from './pages/Dashboard';
-import SyncPage from './pages/Sync';
 import ChecklistPage from './pages/Checklist';
 import SettingsPage from './pages/Settings';
 import CategoriesPage from './pages/Categories';
@@ -36,7 +35,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/sync" element={<SyncPage />} />
           <Route path="/checklist" element={<ChecklistPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />

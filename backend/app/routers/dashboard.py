@@ -8,12 +8,32 @@ from ..schemas.dashboard import (
     CategoryAmountDTO,
     DailyCashflowDTO,
     DailyNetworthDTO,
+    DashboardBoundsResponse,
     DashboardResponse,
     NetworthComponentDTO,
 )
 from ..schemas.snapshots import snapshot_to_dto
 
 router = APIRouter()
+
+
+@router.get("/bounds")
+def get_dashboard_bounds(player: CurrentPlayer = Depends(get_current_player)) -> DashboardBoundsResponse:
+    """The full min/max timestamp span available to this player — snapshots AND log entries.
+
+    A snapshot only marks a sync moment; a Full History Sync pulls log entries reaching back
+    far further than any snapshot's own history. Bounding the Dashboard's presets by snapshot
+    timestamps alone silently clips "All time" (and every relative preset) to exclude real,
+    older cashflow data that's actually in the database.
+    """
+    snapshot_range = db.get_snapshot_timestamp_range(player.player_id)
+    entry_range = db.get_log_entry_timestamp_range(player.player_id)
+    if snapshot_range is None and entry_range is None:
+        return DashboardBoundsResponse(min_ts=None, max_ts=None)
+    candidates = [r for r in (snapshot_range, entry_range) if r is not None]
+    min_ts = min(r[0] for r in candidates)
+    max_ts = max(r[1] for r in candidates)
+    return DashboardBoundsResponse(min_ts=min_ts, max_ts=max_ts)
 
 
 @router.get("")

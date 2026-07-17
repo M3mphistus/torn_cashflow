@@ -5,6 +5,7 @@ import { login, logout } from '../api/auth';
 import { getWarMode, setWarMode } from '../api/settings';
 import { getLicensingStatus, startTrial, scanPayment, getFactionPreview, scanGroupPayment } from '../api/licensing';
 import { getLifetimeGrants, createLifetimeGrant, deleteLifetimeGrant } from '../api/admin';
+import { clearAllData } from '../api/data';
 import { ApiError } from '../api/client';
 import SectionHeading from '../components/ui/SectionHeading';
 import AlertBanner from '../components/ui/AlertBanner';
@@ -86,6 +87,15 @@ export default function SettingsPage() {
   const revokeGrantMutation = useMutation({
     mutationFn: ({ scope, key }: { scope: GrantScope; key: number }) => deleteLifetimeGrant(scope, key),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'grants'] }),
+  });
+
+  const [confirmClear, setConfirmClear] = useState(false);
+  const clearMutation = useMutation({
+    mutationFn: clearAllData,
+    onSuccess: () => {
+      setConfirmClear(false);
+      queryClient.invalidateQueries();
+    },
   });
 
   if (!player || !premium) return null;
@@ -190,7 +200,7 @@ export default function SettingsPage() {
           </li>
         </ul>
         <p>
-          To remove your synced data, use <strong>Clear DB</strong> on the Sync page — it
+          To remove your synced data, use <strong>Clear DB</strong> in the Danger Zone below — it
           permanently deletes your snapshots, log entries, and category rules. It does not
           currently remove your player record or Premium/license history; if you'd like your
           account fully deleted, contact the developer directly.
@@ -358,6 +368,24 @@ export default function SettingsPage() {
           )}
         </>
       )}
+
+      <hr />
+      <SectionHeading>Danger Zone</SectionHeading>
+      <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>
+        Deletes all your synced snapshots, log entries, and learned category rules from the
+        database. Your checklist tasks and War Mode setting are not affected. This cannot be
+        undone.
+      </p>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none' }}>
+        <input type="checkbox" style={{ width: 'auto' }} checked={confirmClear} onChange={(e) => setConfirmClear(e.target.checked)} />
+        I understand this permanently deletes all synced data
+      </label>
+      <div style={{ marginTop: 8 }}>
+        <Button variant="danger" disabled={!confirmClear || clearMutation.isPending} onClick={() => clearMutation.mutate()}>
+          Clear DB
+        </Button>
+      </div>
+      {clearMutation.isSuccess && <AlertBanner kind="success">All synced data cleared.</AlertBanner>}
     </div>
   );
 }
